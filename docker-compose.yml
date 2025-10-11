@@ -1,0 +1,77 @@
+services:
+  db:
+    container_name: afapa-db
+    image: mongo:8.0-noble
+    restart: always
+    ports:
+      - 127.0.0.1:27017:27017
+    volumes:
+      - db_data:/data/db # MongoDB default data directory
+    env_file:
+      - .env
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-root}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-afapa}
+    healthcheck:
+      # Ensure MongoDB is ready before starting dependent services
+      test: [ "CMD-SHELL", "mongosh --username \"$MONGO_INITDB_ROOT_USERNAME\" --password \"$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --quiet --eval \"db.adminCommand({ ping: 1 })\"" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - afapa-network
+
+  n8n:
+    container_name: afapa-n8n
+    image: n8nio/n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    env_file:
+      - .env
+    volumes:
+      - n8n_data:/home/node/.n8n
+    environment:
+      N8N_HOST: 0.0.0.0
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      # WARNING: Provide a strong encryption key via environment variables for security.
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-please-change-me}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - afapa-network
+
+  waha:
+    container_name: afapa-waha
+    image: devlikeapro/waha
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      WAHA_HOST: 0.0.0.0
+      WAHA_PORT: 3000
+      WAHA_PROTOCOL: http
+      # WARNING: Provide a strong encryption key via environment variables for security.
+      WAHA_ENCRYPTION_KEY: ${WAHA_ENCRYPTION_KEY:-please-change-me}
+      WAHA_API_KEY: ${WAHA_API_KEY:-please-change-me}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - afapa-network
+
+networks:
+  afapa-network:
+    driver: bridge
+
+volumes:
+  db_data:
+    driver: local
+  n8n_data:
+    driver: local
