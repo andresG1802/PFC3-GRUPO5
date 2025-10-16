@@ -66,6 +66,24 @@ services:
     networks:
       - afapa-network
 
+  translator:
+    build: .
+    image: quichua-translator:latest
+    volumes:
+      - ./model:/app/model
+    environment:
+      - MODEL_ID=/app/model/qnia
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    runtime: nvidia
+
 networks:
   afapa-network:
     driver: bridge

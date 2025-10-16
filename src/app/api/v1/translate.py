@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from app.core.model_loader import Translator
 
 router = APIRouter()
-translator = Translator()   # se carga al arrancar la app
+# Cargamos el modelo al iniciar la APP
+translator = Translator()
 
 class TranslateRequest(BaseModel):
     text: str
