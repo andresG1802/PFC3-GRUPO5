@@ -75,14 +75,15 @@ services:
       - MODEL_ID=/app/model/qnia
     ports:
       - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    runtime: nvidia
+    # Device request para GPU (funciona con Docker Desktop / Compose v1.29+ / Compose V2)
+    deploy: {}
+    device_requests:
+      - driver: "nvidia"
+        count: 1
+        device_ids: ["all"]
+        capabilities: ["gpu"]
+    networks:
+      - afapa-network
 
 networks:
   afapa-network:
