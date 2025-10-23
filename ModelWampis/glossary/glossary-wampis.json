@@ -1,0 +1,203 @@
+{
+  "meta": {
+    "language_pair": "es↔wampis",
+    "source": "Glosario Multilingüe – Loreto (Min. Cultura, 2018)"
+  },
+  "pairs": [
+    {
+      "es": "Buenos días",
+      "wa": "Tsawarumek",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Buenas tardes",
+      "wa": "Kintameawai",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Buenas noches",
+      "wa": "Kintamrayi",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Buenos días, hermano, hermana",
+      "wa": "Tsaware yatsuru umaru",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Niño, niña",
+      "wa": "Uchi, nuwach",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Bienvenido(a) a la PIAS",
+      "wa": "Penker kaunkaurme PIASNUM",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Hola, ¿cómo están?",
+      "wa": "Turuasha ¿shirak matsa‑trum?",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Mi nombre es (...)",
+      "wa": "Minia naarka...",
+      "categoria": "recepción"
+    },
+    {
+      "es": "¿Cuál es el motivo de su visita?",
+      "wa": "Wari itiruchatnum wakame?",
+      "categoria": "recepción"
+    },
+    {
+      "es": "¿En qué podemos ayudarlo/a?",
+      "wa": "Warinma yaimainitjam?",
+      "categoria": "recepción"
+    },
+    {
+      "es": "¿Cuál es su nombre?",
+      "wa": "Tuwaitia naarmeşa",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Adelante, señor",
+      "wa": "Untaa Wañata",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Adelante, señora",
+      "wa": "Encachi Wañata",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Siéntate aquí / Tome asiento",
+      "wa": "Ekemsata jui / ekemsata / ekemsatarma",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Espere un momento",
+      "wa": "Ishichik nakarsata",
+      "categoria": "recepción"
+    },
+    {
+      "es": "Esperen un momento",
+      "wa": "Ishichik nakarsatarma",
+      "categoria": "recepción"
+    },
+    {
+      "es": "¿Me podría decir cuál es su lengua materna?",
+      "wa": "Tuwait ame chichammesha?",
+      "categoria": "identificación"
+    },
+    {
+      "es": "¿Habla castellano?",
+      "wa": "Apach chicham chichaukm",
+      "categoria": "identificación"
+    },
+    {
+      "es": "Sí",
+      "wa": "Ee",
+      "categoria": "identificación"
+    },
+    {
+      "es": "No",
+      "wa": "Atsa",
+      "categoria": "identificación"
+    },
+    {
+      "es": "¿Habla otra lengua?",
+      "wa": "Tikish chichamsha chichaukm?",
+      "categoria": "identificación"
+    },
+    {
+      "es": "¿Cuál?",
+      "wa": "¿Tuu chichama?",
+      "categoria": "identificación"
+    },
+    {
+      "es": "¿Prefiere usted hablar en su lengua originaria o castellano?",
+      "wa": "Ame chichamrumjen chichaktasam wakeram atsa apach chichamjen",
+      "categoria": "identificación"
+    },
+    {
+      "es": "Disculpe. Le pediré ayuda a alguien para poder atenderlo en su lengua originaria",
+      "wa": "Tsankurtusta. chikichak shuar an enaktaje ame chichamrumjen yainmakti",
+      "categoria": "identificación"
+    },
+    {
+      "es": "¿Lo/La están atendiendo?",
+      "wa": "Yainmeñawak",
+      "categoria": "orientación"
+    },
+    {
+      "es": "¿Qué necesita?",
+      "wa": "Wari enam",
+      "categoria": "orientación"
+    },
+    {
+      "es": "El servicio es gratuito",
+      "wa": "Juu yaimmauka akinchauwaiti",
+      "categoria": "orientación"
+    },
+    {
+      "es": "El servicio es confidencial",
+      "wa": "Juu takamuka ukmauwaiti",
+      "categoria": "orientación"
+    },
+    {
+      "es": "Por favor, hábleme un poco más despacio",
+      "wa": "Wait aneasam, yaitasam",
+      "categoria": "orientación"
+    },
+    {
+      "es": "No entiendo bien lo que dice, ¿puede por favor repetir?",
+      "wa": "Antukchaje ame tame nunaka, ataksha tikia",
+      "categoria": "orientación"
+    },
+    {
+      "es": "¿Podría brindarme su número de DNI?",
+      "wa": "Denairmi numeruri surumainkaitiam",
+      "categoria": "orientación"
+    },
+    {
+      "es": "Por favor, muéstreme su DNI",
+      "wa": "Wait, anesam, ame denairam iñaktursata",
+      "categoria": "orientación"
+    },
+    {
+      "es": "Por favor, entrégueme su documento",
+      "wa": "Wait anesam surusta documenturam",
+      "categoria": "orientación"
+    },
+    {
+      "es": "Su pedido no podrá ser atendido por ahora (explicar razón)",
+      "wa": "Ame seamam nunaka yamaikika yaimainchuitjame",
+      "categoria": "orientación"
+    },
+    {
+      "es": "¿Desea registrar una queja o hacer una sugerencia?",
+      "wa": "¿Aartasa wakeramek ame itiruchat enenatinmau aarta ame enenatinmau?",
+      "categoria": "orientación"
+    },
+    {
+      "es": "Gracias",
+      "wa": "Maketai",
+      "categoria": "despedida"
+    },
+    {
+      "es": "Ha sido un gusto atenderlo/a",
+      "wa": "Penker yainkujme amiña",
+      "categoria": "despedida"
+    },
+    {
+      "es": "Hasta luego / Nos vemos pronto",
+      "wa": "Pujumata, /arum waiñimi",
+      "categoria": "despedida"
+    },
+    {
+      "es": "Descanse",
+      "wa": "Iñamrata",
+      "categoria": "despedida"
+    }
+  ]
+}
