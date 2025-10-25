@@ -36,7 +36,6 @@ services:
       N8N_HOST: 0.0.0.0
       N8N_PORT: 5678
       N8N_PROTOCOL: http
-      # WARNING: Provide a strong encryption key via environment variables for security.
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-please-change-me}
     depends_on:
       db:
@@ -49,14 +48,10 @@ services:
     image: devlikeapro/waha
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:8000"
     env_file:
       - .env
     environment:
-      WAHA_HOST: 0.0.0.0
-      WAHA_PORT: 3000
-      WAHA_PROTOCOL: http
-      # WARNING: Provide a strong encryption key via environment variables for security.
       WAHA_ENCRYPTION_KEY: ${WAHA_ENCRYPTION_KEY:-please-change-me}
       WAHA_API_KEY: ${WAHA_API_KEY:-please-change-me}
     depends_on:
