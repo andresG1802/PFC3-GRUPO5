@@ -5,6 +5,16 @@ Modelos Pydantic para el router de Interactions
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
+from enum import Enum
+
+
+class InteractionState(str, Enum):
+    """Estados posibles para una interaction"""
+    
+    MENUS = "menus"
+    PENDING = "pending"
+    DERIVED = "derived"
+    CLOSED = "closed"
 
 
 class TimelineEntry(BaseModel):
@@ -19,7 +29,7 @@ class InteractionBase(BaseModel):
     """Modelo base para interaction"""
 
     phone: str = Field(..., description="Número de teléfono")
-    state: str = Field(default="menus", description="Estado actual")
+    state: InteractionState = Field(default=InteractionState.MENUS, description="Estado actual")
     route: str = Field(..., description="Ruta actual")
     step: int = Field(default=1, description="Paso actual")
     lang: Optional[str] = Field(default=None, description="Idioma")
@@ -28,16 +38,10 @@ class InteractionBase(BaseModel):
     )
 
 
-class InteractionCreate(InteractionBase):
-    """Modelo para crear interaction"""
-
-    pass
-
-
 class InteractionUpdate(BaseModel):
     """Modelo para actualizar interaction"""
 
-    state: Optional[str] = None
+    state: Optional[InteractionState] = None
     route: Optional[str] = None
     step: Optional[int] = None
     lang: Optional[str] = None
@@ -73,12 +77,6 @@ class InteractionListResponse(BaseModel):
     has_previous: bool = Field(..., description="Indica si hay páginas anteriores")
     page: int = Field(..., description="Número de página actual (basado en skip/limit)")
     total_pages: int = Field(..., description="Número total de páginas")
-
-
-class AssignAsesorRequest(BaseModel):
-    """Modelo para asignar asesor a una interaction"""
-
-    pass  # No necesita campos adicionales, usa el asesor autenticado
 
 
 class AssignAsesorResponse(BaseModel):
