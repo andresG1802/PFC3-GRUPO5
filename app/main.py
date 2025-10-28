@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from .api.v1.auth import router as auth_router
 from .api.v1.health import router as health_router
 from .api.v1.interactions import router as interactions_router
+from .middleware import SecurityHeadersMiddleware
 
 from .api.envs import HOST, PORT, DEBUG
 from .database import close_database_connection
@@ -44,6 +45,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Agregar middleware de seguridad (debe ir después de CORS)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth_router, prefix="/auth")
 app.include_router(health_router, prefix="/health")

@@ -264,13 +264,14 @@ class AsesorModel:
     """Modelo para manejar asesores en MongoDB"""
 
     @staticmethod
-    def create_asesor(email: str, password: str, full_name: str):
+    def create_asesor(email: str, password: str, full_name: str, role: str = "asesor"):
         """Crea un nuevo asesor en la base de datos"""
         collection = get_asesores_collection()
         asesor_data = {
             "email": email,
             "password": password,
             "full_name": full_name,
+            "role": role,  # Nuevo campo: "admin" o "asesor"
             "is_active": True,
             "createdAt": datetime.utcnow(),
         }

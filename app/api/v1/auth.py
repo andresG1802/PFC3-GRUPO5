@@ -11,7 +11,14 @@ import jwt
 import hashlib
 
 # Importar modelos desde el módulo centralizado
-from ..models.auth import LoginRequest, TokenResponse, AsesorInfo, ChangePasswordRequest
+from ..models.auth import (
+    LoginRequest,
+    TokenResponse,
+    AsesorInfo,
+    ChangePasswordRequest,
+    RegisterAsesorRequest,
+    RegisterAsesorResponse,
+)
 
 # Importar modelo de asesor de la base de datos
 from ...database.models import AsesorModel
@@ -47,14 +54,21 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
             credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM]
         )
         email: str = payload.get("sub")
+        role: str = payload.get("role", "asesor")  # Extraer rol del token
         if email is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token inválido",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        return email
-    except jwt.PyJWTError:
+        return {"email": email, "role": role}
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido",
@@ -62,14 +76,26 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         )
 
 
-def get_current_user(email: str = Depends(verify_token)):
-    """Obtiene el asesor actual basado en el token"""
-    asesor = AsesorModel.find_by_email(email)
+def get_current_user(token_data: dict = Depends(verify_token)):
+    """Obtiene el asesor actual desde el token"""
+    asesor = AsesorModel.find_by_email(token_data["email"])
     if asesor is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Asesor no encontrado"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Asesor no encontrado"
         )
+    # Agregar el rol del token al objeto asesor
+    asesor["role"] = token_data["role"]
     return asesor
+
+
+def get_current_admin(current_user: dict = Depends(get_current_user)):
+    """Middleware para verificar que el usuario actual es un administrador"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: Se requieren permisos de administrador",
+        )
+    return current_user
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -102,15 +128,76 @@ async def login(login_data: LoginRequest):
 
     access_token_expires = timedelta(minutes=JWT_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": asesor["email"]}, expires_delta=access_token_expires
+        data={"sub": asesor["email"], "role": asesor.get("role", "asesor")},
+        expires_delta=access_token_expires,
     )
 
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
         expires_in=JWT_EXPIRE_MINUTES * 60,
-        asesor_id=asesor["_id"],
+        asesor_id=current_user["_id"],
     )
+
+
+@router.post("/register", response_model=RegisterAsesorResponse)
+async def register_asesor(
+    register_data: RegisterAsesorRequest,
+    current_admin: dict = Depends(get_current_admin),
+):
+    """
+    Registra un nuevo asesor (solo administradores)
+
+    Args:
+        register_data: Datos del nuevo asesor
+        current_admin: Administrador actual (verificado por middleware)
+
+    Returns:
+        RegisterAsesorResponse: Información del asesor creado
+
+    Raises:
+        HTTPException: Si el email ya existe o hay errores de validación
+    """
+    # Verificar si el email ya existe
+    existing_asesor = AsesorModel.find_by_email(register_data.email)
+    if existing_asesor:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="El email ya está registrado",
+        )
+
+    # Validar rol
+    if register_data.role not in ["asesor", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Rol inválido. Debe ser 'asesor' o 'admin'",
+        )
+
+    # Hashear contraseña
+    hashed_password = hash_password(register_data.password)
+
+    # Crear nuevo asesor
+    try:
+        asesor_id = AsesorModel.create_asesor(
+            email=register_data.email,
+            password=hashed_password,
+            full_name=register_data.full_name,
+            role=register_data.role,
+        )
+
+        return RegisterAsesorResponse(
+            message="Asesor registrado exitosamente",
+            asesor_id=str(asesor_id),
+            email=register_data.email,
+            full_name=register_data.full_name,
+            role=register_data.role,
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error al crear asesor: {str(e)}",
+        )
 
 
 @router.post("/logout")
@@ -194,9 +281,9 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
         TokenResponse: Nuevo token de acceso
     """
     # Crear nuevo token de acceso
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expires = timedelta(minutes=JWT_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": current_user["email"], "asesor_id": str(current_user["_id"])},
+        data={"sub": current_user["email"], "role": current_user.get("role", "asesor")},
         expires_delta=access_token_expires,
     )
 

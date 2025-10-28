@@ -19,7 +19,7 @@ from .auth import get_current_user
 router = APIRouter(tags=["Interactions"])
 
 
-@router.get("/", response_model=InteractionListResponse)
+@router.get("", response_model=InteractionListResponse)
 async def get_interactions(
     skip: int = Query(0, ge=0, description="Número de registros a omitir"),
     limit: int = Query(
@@ -28,6 +28,7 @@ async def get_interactions(
     state: Optional[str] = Query(
         None, description="Filtrar por estado de la interaction"
     ),
+    current_asesor: dict = Depends(get_current_user),
 ):
     """
     Obtiene lista de interactions con paginación completa y filtro opcional por estado
@@ -36,6 +37,7 @@ async def get_interactions(
         skip: Número de registros a omitir
         limit: Número máximo de registros a retornar
         state: Estado opcional para filtrar interactions (ej: "menus", "active", "completed")
+        current_asesor: Asesor autenticado (obtenido del token)
 
     Returns:
         InteractionListResponse: Lista paginada de interactions con metadatos completos
@@ -80,13 +82,15 @@ async def get_interactions(
 
 @router.get("/{interaction_id}", response_model=InteractionResponse)
 async def get_interaction(
-    interaction_id: str = Path(..., description="ID de la interaction")
+    interaction_id: str = Path(..., description="ID de la interaction"),
+    current_asesor: dict = Depends(get_current_user),
 ):
     """
     Obtiene una interaction específica por ID
 
     Args:
         interaction_id: ID de la interaction
+        current_asesor: Asesor autenticado (obtenido del token)
 
     Returns:
         InteractionResponse: Datos de la interaction
