@@ -3,11 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .api.v1.auth import router as auth_router
-from .api.v1.users import router as users_router
 from .api.v1.health import router as health_router
-from .api.v1.system import router as system_router
+from .api.v1.interactions import router as interactions_router
 
 from .api.envs import HOST, PORT, DEBUG
+from .database import close_database_connection
 
 
 @asynccontextmanager
@@ -17,9 +17,12 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     print("Starting Backend API...")
+    print("Connecting to MongoDB...")
     yield
     # Shutdown
-    print("API succesfully shutdown")
+    print("Closing database connections...")
+    close_database_connection()
+    print("API successfully shutdown")
 
 
 # Crear aplicación FastAPI
@@ -43,9 +46,8 @@ app.add_middleware(
 )
 
 app.include_router(auth_router, prefix="/auth")
-app.include_router(users_router, prefix="/users")
 app.include_router(health_router, prefix="/health")
-app.include_router(system_router, prefix="/system")
+app.include_router(interactions_router, prefix="/interactions")
 
 if __name__ == "__main__":
     import uvicorn

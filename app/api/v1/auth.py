@@ -1,5 +1,5 @@
 """
-Autenticación - Endpoints para login, logout y gestión de tokens
+Autenticación - Endpoints para login, logout y gestión de tokens de asesores
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -8,31 +8,22 @@ from typing import Optional
 from ..envs import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
 from datetime import datetime, timedelta
 import jwt
+import hashlib
 
 # Importar modelos desde el módulo centralizado
-from ..models.auth import LoginRequest, TokenResponse, UserInfo, ChangePasswordRequest
+from ..models.auth import LoginRequest, TokenResponse, AsesorInfo, ChangePasswordRequest
+
+# Importar modelo de asesor de la base de datos
+from ...database.models import AsesorModel
 
 # Configurar router con tags a nivel de clase
 router = APIRouter(tags=["Autenticación"])
 security = HTTPBearer()
 
-# Simulación de usuarios para autenticación
-fake_users = {
-    "admin@example.com": {
-        "id": 1,
-        "email": "admin@example.com",
-        "full_name": "Administrador",
-        "password": "admin123",  # En producción usar hash
-        "is_active": True,
-    },
-    "user@example.com": {
-        "id": 2,
-        "email": "user@example.com",
-        "full_name": "Usuario Demo",
-        "password": "user123",  # En producción usar hash
-        "is_active": True,
-    },
-}
+# Función para hashear contraseñas (mejorada)
+def hash_password(password: str) -> str:
+    """Hashea una contraseña usando SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -41,7 +32,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=15)
+        expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
 
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -71,19 +62,19 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 def get_current_user(email: str = Depends(verify_token)):
-    """Obtiene el usuario actual basado en el token"""
-    user = fake_users.get(email)
-    if user is None:
+    """Obtiene el asesor actual basado en el token"""
+    asesor = AsesorModel.find_by_email(email)
+    if asesor is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario no encontrado"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Asesor no encontrado"
         )
-    return user
+    return asesor
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest):
     """
-    Autentica un usuario y retorna un token de acceso
+    Autentica un asesor y retorna un token de acceso
 
     Args:
         login_data: Credenciales de login
@@ -94,40 +85,40 @@ async def login(login_data: LoginRequest):
     Raises:
         HTTPException: Si las credenciales son inválidas
     """
-    user = fake_users.get(login_data.email)
+    asesor = AsesorModel.find_by_email(login_data.email)
 
-    if not user or user["password"] != login_data.password:
+    if not asesor or asesor["password"] != hash_password(login_data.password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if not user["is_active"]:
+    if not asesor["is_active"]:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Usuario inactivo"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Asesor inactivo"
         )
 
     access_token_expires = timedelta(minutes=JWT_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["email"]}, expires_delta=access_token_expires
+        data={"sub": asesor["email"]}, expires_delta=access_token_expires
     )
 
     return TokenResponse(
         access_token=access_token,
         token_type="bearer",
         expires_in=JWT_EXPIRE_MINUTES * 60,
-        user_id=user["id"],
+        asesor_id=asesor["_id"],
     )
 
 
 @router.post("/logout")
 async def logout(current_user: dict = Depends(get_current_user)):
     """
-    Cierra la sesión del usuario actual
+    Cierra la sesión del asesor actual
 
     Args:
-        current_user: Usuario autenticado
+        current_user: Asesor autenticado
 
     Returns:
         dict: Mensaje de confirmación
@@ -135,73 +126,79 @@ async def logout(current_user: dict = Depends(get_current_user)):
     return {"message": "Sesión cerrada correctamente"}
 
 
-@router.get("/me", response_model=UserInfo)
-async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+@router.get("/me")
+async def get_asesor_info(current_user: dict = Depends(get_current_user)):
     """
-    Obtiene información del usuario autenticado
-
+    Obtiene la información del asesor actual
+    
     Args:
-        current_user: Usuario autenticado
-
+        current_user: Asesor actual obtenido del token
+        
     Returns:
-        UserInfo: Información del usuario
+        dict: Información del asesor (sin contraseña)
     """
-    return UserInfo(
-        id=current_user["id"],
-        email=current_user["email"],
-        full_name=current_user["full_name"],
-        is_active=current_user["is_active"],
-    )
+    # Remover información sensible
+    asesor_info = current_user.copy()
+    asesor_info.pop("password", None)
+    
+    # Convertir ObjectId a string para serialización JSON
+    if "_id" in asesor_info:
+        asesor_info["_id"] = str(asesor_info["_id"])
+    
+    return asesor_info
 
 
 @router.post("/change-password")
 async def change_password(
-    password_data: ChangePasswordRequest, current_user: dict = Depends(get_current_user)
+    password_data: ChangePasswordRequest, 
+    current_user: dict = Depends(get_current_user)
 ):
     """
-    Cambia la contraseña del usuario autenticado
-
+    Cambia la contraseña del asesor actual
+    
     Args:
-        password_data: Datos para cambio de contraseña
-        current_user: Usuario autenticado
-
+        password_data: Datos con contraseña actual y nueva
+        current_user: Asesor actual obtenido del token
+        
     Returns:
         dict: Mensaje de confirmación
-
+        
     Raises:
         HTTPException: Si la contraseña actual es incorrecta
     """
-    if current_user["password"] != password_data.current_password:
+    # Verificar contraseña actual
+    if current_user["password"] != hash_password(password_data.current_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contraseña actual incorrecta",
+            detail="Contraseña actual incorrecta"
         )
-
-    # En producción, aquí se actualizaría la contraseña en la base de datos
-    fake_users[current_user["email"]]["password"] = password_data.new_password
-
-    return {"message": "Contraseña actualizada correctamente"}
+    
+    # Actualizar contraseña en la base de datos
+    hashed_new_password = hash_password(password_data.new_password)
+    AsesorModel.update_by_email(
+        current_user["email"], 
+        {"password": hashed_new_password}
+    )
+    
+    return {"message": "Contraseña actualizada exitosamente"}
 
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(current_user: dict = Depends(get_current_user)):
     """
-    Renueva el token de acceso del usuario autenticado
-
+    Refresca el token de acceso del asesor
+    
     Args:
-        current_user: Usuario autenticado
-
+        current_user: Asesor actual obtenido del token
+        
     Returns:
         TokenResponse: Nuevo token de acceso
     """
-    access_token_expires = timedelta(minutes=JWT_EXPIRE_MINUTES)
+    # Crear nuevo token de acceso
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": current_user["email"]}, expires_delta=access_token_expires
+        data={"sub": current_user["email"], "asesor_id": str(current_user["_id"])}, 
+        expires_delta=access_token_expires
     )
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=JWT_EXPIRE_MINUTES * 60,
-        user_id=current_user["id"],
-    )
+    
+    return {"access_token": access_token, "token_type": "bearer"}

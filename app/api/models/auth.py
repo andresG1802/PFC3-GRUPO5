@@ -18,11 +18,11 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     expires_in: int
-    user_id: int
+    asesor_id: int
 
 
-class UserInfo(BaseModel):
-    """Modelo para información del usuario autenticado"""
+class AsesorInfo(BaseModel):
+    """Modelo para información del asesor autenticado"""
 
     id: int
     email: str
