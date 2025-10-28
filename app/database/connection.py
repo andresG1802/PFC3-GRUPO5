@@ -23,11 +23,29 @@ _database: Optional[Database] = None
 def get_mongodb_url() -> str:
     """
     Construye la URL de conexión a MongoDB
+    Detecta automáticamente si se ejecuta en Docker o localmente
 
     Returns:
         str: URL de conexión a MongoDB
     """
-    return f"mongodb://{MONGO_INITDB_ROOT_USERNAME}:{MONGO_INITDB_ROOT_PASSWORD}@localhost:27017/{MONGO_INITDB_DATABASE}?authSource=admin"
+    import os
+    
+    # Detectar si estamos en un contenedor Docker
+    is_docker = os.path.exists('/.dockerenv') or os.environ.get('DOCKER_CONTAINER', False)
+    
+    if is_docker:
+        # Dentro de Docker, usar el nombre del servicio
+        host = "db"
+        port = "27017"
+        logger.info(f"Conectando a MongoDB en Docker: {host}:{port}")
+    else:
+        # Fuera de Docker, usar localhost con el puerto mapeado
+        host = "localhost"
+        # Obtener el puerto mapeado desde docker ps o usar el puerto por defecto
+        port = "63445"  # Puerto mapeado actual según docker ps
+        logger.info(f"Conectando a MongoDB localmente: {host}:{port}")
+        
+    return f"mongodb://{MONGO_INITDB_ROOT_USERNAME}:{MONGO_INITDB_ROOT_PASSWORD}@{host}:{port}/{MONGO_INITDB_DATABASE}?authSource=admin"
 
 
 def get_database() -> Database:

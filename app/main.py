@@ -9,6 +9,7 @@ from .middleware import SecurityHeadersMiddleware
 
 from .api.envs import HOST, PORT, DEBUG
 from .database import close_database_connection
+from .database.seeder import seed_database
 
 
 @asynccontextmanager
@@ -19,6 +20,13 @@ async def lifespan(app: FastAPI):
     # Startup
     print("Starting Backend API...")
     print("Connecting to MongoDB...")
+
+    # Ejecutar seeder para poblar la base de datos
+    try:
+        seed_database()
+    except Exception as e:
+        print(f"Error durante el seeding: {e}")
+
     yield
     # Shutdown
     print("Closing database connections...")

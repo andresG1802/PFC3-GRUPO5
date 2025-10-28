@@ -10,7 +10,7 @@ from enum import Enum
 
 class InteractionState(str, Enum):
     """Estados posibles para una interaction"""
-    
+
     MENUS = "menus"
     PENDING = "pending"
     DERIVED = "derived"
@@ -29,12 +29,17 @@ class InteractionBase(BaseModel):
     """Modelo base para interaction"""
 
     phone: str = Field(..., description="Número de teléfono")
-    state: InteractionState = Field(default=InteractionState.MENUS, description="Estado actual")
+    state: InteractionState = Field(
+        default=InteractionState.MENUS, description="Estado actual"
+    )
     route: str = Field(..., description="Ruta actual")
     step: int = Field(default=1, description="Paso actual")
     lang: Optional[str] = Field(default=None, description="Idioma")
     timeline: List[TimelineEntry] = Field(
-        default_factory=list, description="Historial de interacciones"
+        default_factory=list,
+        description="Historial de interacciones",
+        # {"route_1", "1", "1"}
+        # {[ruta anterior], [step anterior], [input del usuario anterior]}
     )
 
 
@@ -42,9 +47,9 @@ class InteractionUpdate(BaseModel):
     """Modelo para actualizar interaction"""
 
     state: Optional[InteractionState] = None
-    route: Optional[str] = None
-    step: Optional[int] = None
-    lang: Optional[str] = None
+    route: Optional[str] = None  # route_1, route_2, ... , route_4
+    step: Optional[int] = None  # 1, 2, 3, 4, 5
+    lang: Optional[str] = None  # es, qu
     timeline: Optional[List[TimelineEntry]] = None
 
 

@@ -19,6 +19,11 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - afapa-network
 
@@ -78,10 +83,15 @@ services:
       - ${PORT}:${PORT}
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:${PORT}/health || exit 1" ]
-      interval: 1m
+      interval: 5m
       timeout: 30s
       retries: 5
       start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - afapa-network
 
