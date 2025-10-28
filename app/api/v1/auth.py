@@ -20,6 +20,7 @@ from ...database.models import AsesorModel
 router = APIRouter(tags=["Autenticación"])
 security = HTTPBearer()
 
+
 # Función para hashear contraseñas (mejorada)
 def hash_password(password: str) -> str:
     """Hashea una contraseña usando SHA-256"""
@@ -130,39 +131,38 @@ async def logout(current_user: dict = Depends(get_current_user)):
 async def get_asesor_info(current_user: dict = Depends(get_current_user)):
     """
     Obtiene la información del asesor actual
-    
+
     Args:
         current_user: Asesor actual obtenido del token
-        
+
     Returns:
         dict: Información del asesor (sin contraseña)
     """
     # Remover información sensible
     asesor_info = current_user.copy()
     asesor_info.pop("password", None)
-    
+
     # Convertir ObjectId a string para serialización JSON
     if "_id" in asesor_info:
         asesor_info["_id"] = str(asesor_info["_id"])
-    
+
     return asesor_info
 
 
 @router.post("/change-password")
 async def change_password(
-    password_data: ChangePasswordRequest, 
-    current_user: dict = Depends(get_current_user)
+    password_data: ChangePasswordRequest, current_user: dict = Depends(get_current_user)
 ):
     """
     Cambia la contraseña del asesor actual
-    
+
     Args:
         password_data: Datos con contraseña actual y nueva
         current_user: Asesor actual obtenido del token
-        
+
     Returns:
         dict: Mensaje de confirmación
-        
+
     Raises:
         HTTPException: Si la contraseña actual es incorrecta
     """
@@ -170,16 +170,15 @@ async def change_password(
     if current_user["password"] != hash_password(password_data.current_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Contraseña actual incorrecta"
+            detail="Contraseña actual incorrecta",
         )
-    
+
     # Actualizar contraseña en la base de datos
     hashed_new_password = hash_password(password_data.new_password)
     AsesorModel.update_by_email(
-        current_user["email"], 
-        {"password": hashed_new_password}
+        current_user["email"], {"password": hashed_new_password}
     )
-    
+
     return {"message": "Contraseña actualizada exitosamente"}
 
 
@@ -187,18 +186,18 @@ async def change_password(
 async def refresh_token(current_user: dict = Depends(get_current_user)):
     """
     Refresca el token de acceso del asesor
-    
+
     Args:
         current_user: Asesor actual obtenido del token
-        
+
     Returns:
         TokenResponse: Nuevo token de acceso
     """
     # Crear nuevo token de acceso
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": current_user["email"], "asesor_id": str(current_user["_id"])}, 
-        expires_delta=access_token_expires
+        data={"sub": current_user["email"], "asesor_id": str(current_user["_id"])},
+        expires_delta=access_token_expires,
     )
-    
+
     return {"access_token": access_token, "token_type": "bearer"}

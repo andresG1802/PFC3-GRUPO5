@@ -9,7 +9,7 @@ import logging
 from ..api.envs import (
     MONGO_INITDB_ROOT_USERNAME,
     MONGO_INITDB_ROOT_PASSWORD,
-    MONGO_INITDB_DATABASE
+    MONGO_INITDB_DATABASE,
 )
 
 # Configurar logging
@@ -23,7 +23,7 @@ _database: Optional[Database] = None
 def get_mongodb_url() -> str:
     """
     Construye la URL de conexión a MongoDB
-    
+
     Returns:
         str: URL de conexión a MongoDB
     """
@@ -33,27 +33,27 @@ def get_mongodb_url() -> str:
 def get_database() -> Database:
     """
     Obtiene la instancia de la base de datos MongoDB
-    
+
     Returns:
         Database: Instancia de la base de datos
     """
     global _client, _database
-    
+
     if _database is None:
         try:
             mongodb_url = get_mongodb_url()
             _client = MongoClient(mongodb_url)
-            
+
             # Verificar conexión
-            _client.admin.command('ping')
+            _client.admin.command("ping")
             logger.info("Conexión a MongoDB establecida correctamente")
-            
+
             _database = _client[MONGO_INITDB_DATABASE]
-            
+
         except Exception as e:
             logger.error(f"Error al conectar con MongoDB: {e}")
             raise
-    
+
     return _database
 
 
@@ -62,7 +62,7 @@ def close_database_connection():
     Cierra la conexión a MongoDB
     """
     global _client, _database
-    
+
     if _client:
         _client.close()
         _client = None
@@ -74,7 +74,7 @@ def close_database_connection():
 def get_interactions_collection():
     """
     Obtiene la colección de interactions
-    
+
     Returns:
         Collection: Colección de interactions
     """
@@ -85,7 +85,7 @@ def get_interactions_collection():
 def get_asesores_collection():
     """
     Obtiene la colección de asesores
-    
+
     Returns:
         Collection: Colección de asesores
     """
