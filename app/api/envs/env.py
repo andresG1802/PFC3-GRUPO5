@@ -3,8 +3,13 @@ Configuración centralizada de variables de entorno usando Pydantic.
 Este módulo proporciona validación de tipos y valores por defecto para todas las variables de entorno.
 """
 
-from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator, ConfigDict
+
+try:
+    from pydantic_settings import BaseSettings
+except ImportError:
+    # Fallback para compatibilidad
+    from pydantic import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -13,6 +18,10 @@ class Settings(BaseSettings):
 
     Las variables de entorno se cargan automáticamente y se validan según los tipos definidos.
     """
+
+    model_config = ConfigDict(
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+    )
 
     # Configuración de MongoDB
     mongo_initdb_root_username: str = Field(
@@ -83,11 +92,6 @@ class Settings(BaseSettings):
         if not isinstance(v, int):
             raise ValueError("El valor de port debe ser un entero")
         return v
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
 
 
 # Instancia global de configuración

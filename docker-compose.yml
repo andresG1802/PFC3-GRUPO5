@@ -27,6 +27,24 @@ services:
     networks:
       - afapa-network
 
+  redis:
+    container_name: afapa-redis
+    image: redis:8.2.2-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - ${REDIS_PORT}:6379
+    volumes:
+      - redis_data:/data
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - afapa-network
+
   n8n:
     container_name: afapa-n8n
     image: n8nio/n8n
@@ -73,6 +91,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
       n8n:
         condition: service_started
       waha:
@@ -80,7 +100,7 @@ services:
     env_file:
       - .env
     ports:
-      - ${PORT}:${PORT}
+      - ${PORT}:8000
     healthcheck:
       test: [ "CMD-SHELL", "curl -f http://localhost:${PORT}/health || exit 1" ]
       interval: 5m
@@ -103,4 +123,6 @@ volumes:
   db_data:
     driver: local
   n8n_data:
+    driver: local
+  redis_data:
     driver: local

@@ -14,7 +14,6 @@ import hashlib
 from ..models.auth import (
     LoginRequest,
     TokenResponse,
-    AsesorInfo,
     ChangePasswordRequest,
     RegisterAsesorRequest,
     RegisterAsesorResponse,

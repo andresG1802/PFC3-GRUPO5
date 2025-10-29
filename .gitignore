@@ -3,3 +3,5 @@ venv
 .venv/
 model/
 **__pycache__/
+.benchmarks/
+benchmarks*

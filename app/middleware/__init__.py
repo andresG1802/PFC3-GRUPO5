@@ -2,6 +2,14 @@
 Módulo de middleware para la aplicación FastAPI
 """
 
-from .security import SecurityHeadersMiddleware
+"""
+Middleware de la aplicación
+"""
 
-__all__ = ["SecurityHeadersMiddleware"]
+from .error_handler import (
+    ErrorHandlerMiddleware,
+    TimeoutMiddleware,
+    RateLimitMiddleware,
+)
+
+__all__ = ["ErrorHandlerMiddleware", "TimeoutMiddleware", "RateLimitMiddleware"]

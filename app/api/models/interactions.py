@@ -1,15 +1,13 @@
-"""
-Modelos Pydantic para el router de Interactions
-"""
+"""Modelos Pydantic para interactions"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
 
 class InteractionState(str, Enum):
-    """Estados posibles para una interaction"""
+    """Estados posibles de una interaction"""
 
     MENUS = "menus"
     PENDING = "pending"
@@ -18,8 +16,9 @@ class InteractionState(str, Enum):
 
 
 class TimelineEntry(BaseModel):
-    """Modelo para entradas del timeline"""
+    """Entrada del timeline de una interaction"""
 
+    timestamp: datetime = Field(..., description="Timestamp de la entrada")
     route: Optional[str] = None
     step: Optional[int] = None
     userInput: Optional[str] = None
@@ -28,6 +27,7 @@ class TimelineEntry(BaseModel):
 class InteractionBase(BaseModel):
     """Modelo base para interaction"""
 
+    chat_id: str = Field(..., description="ID del chat")
     phone: str = Field(..., description="Número de teléfono")
     state: InteractionState = Field(
         default=InteractionState.MENUS, description="Estado actual"
@@ -38,13 +38,16 @@ class InteractionBase(BaseModel):
     timeline: List[TimelineEntry] = Field(
         default_factory=list,
         description="Historial de interacciones",
-        # {"route_1", "1", "1"}
-        # {[ruta anterior], [step anterior], [input del usuario anterior]}
+        json_schema_extra={
+            "example": [
+                {"timestamp": "2023-01-01T00:00:00", "route": "route_1", "step": 1}
+            ]
+        },
     )
 
 
 class InteractionUpdate(BaseModel):
-    """Modelo para actualizar interaction"""
+    """Modelo para actualizar una interaction"""
 
     state: Optional[InteractionState] = None
     route: Optional[str] = None  # route_1, route_2, ... , route_4
@@ -56,16 +59,16 @@ class InteractionUpdate(BaseModel):
 class InteractionResponse(InteractionBase):
     """Modelo de respuesta para interaction"""
 
+    model_config = ConfigDict(
+        populate_by_name=True, json_encoders={datetime: lambda v: v.isoformat()}
+    )
+
     id: str = Field(..., alias="_id", description="ID de la interaction")
     createdAt: datetime = Field(..., description="Fecha de creación")
     asesor_id: Optional[str] = Field(default=None, description="ID del asesor asignado")
     assignedAt: Optional[datetime] = Field(
         default=None, description="Fecha de asignación del asesor"
     )
-
-    class Config:
-        populate_by_name = True
-        json_encoders = {datetime: lambda v: v.isoformat()}
 
 
 class InteractionListResponse(BaseModel):
@@ -87,10 +90,9 @@ class InteractionListResponse(BaseModel):
 class AssignAsesorResponse(BaseModel):
     """Modelo de respuesta para asignación de asesor"""
 
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+
     message: str
     interaction_id: str
     asesor_id: str
     assignedAt: datetime
-
-    class Config:
-        json_encoders = {datetime: lambda v: v.isoformat()}
