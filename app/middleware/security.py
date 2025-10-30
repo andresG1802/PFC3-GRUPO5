@@ -1,15 +1,19 @@
-"""
-Middleware de seguridad para agregar headers de seguridad a todas las respuestas HTTP
-"""
+"""Middleware de seguridad para agregar headers de seguridad a todas las respuestas HTTP"""
 
+import logging
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
+
+from ..config.security import security_config
+
+logger = logging.getLogger(__name__)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Middleware que agrega headers de seguridad a todas las respuestas HTTP
+    con configuración centralizada y soporte para diferentes entornos
     """
 
     def __init__(self, app):
@@ -53,15 +57,43 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         Returns:
             Response: La response con headers de seguridad agregados
         """
-        # Procesar la request normalmente
-        response = await call_next(request)
+        try:
+            # Procesar la request normalmente
+            response = await call_next(request)
 
-        # Agregar headers de seguridad a la response
+            # Agregar headers de seguridad a la response
+            self._add_security_headers(response)
+            
+            # Remover headers que pueden revelar información del servidor
+            self._remove_server_headers(response)
+
+            # Agregar header de seguridad personalizado
+            response.headers["X-Security-Headers"] = "enabled"
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error in SecurityHeadersMiddleware: {str(e)}")
+            
+            # En caso de error, continuar sin los headers de seguridad
+            return await call_next(request)
+    
+    def _add_security_headers(self, response: Response) -> None:
+        """Añade todos los headers de seguridad necesarios"""
+        
+        # Agregar todos los headers de seguridad definidos
         for header_name, header_value in self.security_headers.items():
             response.headers[header_name] = header_value
-
-        # Remover el header X-Powered-By si está presente
-        if "X-Powered-By" in response.headers:
-            del response.headers["X-Powered-By"]
-
-        return response
+    
+    def _remove_server_headers(self, response: Response) -> None:
+        """Remueve headers que revelan información del servidor"""
+        headers_to_remove = [
+            "Server",
+            "X-Powered-By", 
+            "X-AspNet-Version",
+            "X-AspNetMvc-Version"
+        ]
+        
+        for header in headers_to_remove:
+            if header in response.headers:
+                del response.headers[header]

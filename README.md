@@ -24,6 +24,4 @@
 - Puedes acceder a la documentación interactiva de la API en `http://localhost:8000/docs`.
 
 # TODOs
-- [ ] Implementar autenticación y autorización.
-- [ ] Añadir endpoints de asesores e interacciones.
 - [ ] Obtener los endpoints para obtener todos los mensajes y recibirlos en vivo.

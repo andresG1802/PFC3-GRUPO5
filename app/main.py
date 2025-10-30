@@ -10,7 +10,14 @@ from .database.connection import get_database, close_database_connection
 from .database.seeder import seed_database
 from .services.waha_client import close_waha_client
 from .utils.logging_config import init_logging
-from .middleware import ErrorHandlerMiddleware, TimeoutMiddleware, RateLimitMiddleware
+from .config.security import rate_limit_config
+from .middleware import (
+    ErrorHandlerMiddleware, 
+    TimeoutMiddleware, 
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    RateLimitingMiddleware
+)
 
 
 @asynccontextmanager
@@ -59,7 +66,9 @@ app = FastAPI(
     ],
 )
 
-# Configurar CORS
+# Configurar middlewares (orden importante: primero los de seguridad)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # En producción, especificar dominios permitidos
@@ -68,11 +77,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Agregar middlewares de manejo de errores y timeouts
+# Middlewares de manejo de errores y timeout
 app.add_middleware(ErrorHandlerMiddleware)
 app.add_middleware(TimeoutMiddleware, timeout_seconds=30.0)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=100)
+# Remover el middleware de rate limiting antiguo ya que usamos el nuevo
+# app.add_middleware(RateLimitMiddleware, requests_per_minute=100)
 
+# Incluir routers
 app.include_router(auth_router, prefix="/auth")
 app.include_router(health_router, prefix="/health")
 app.include_router(interactions_router, prefix="/api/v1/interactions")
@@ -80,11 +91,5 @@ app.include_router(chats_router, prefix="/api/v1/chats")
 
 if __name__ == "__main__":
     import uvicorn
-    from .api.envs import DEBUG, HOST, PORT
-
-    if DEBUG:
-        uvicorn.run(
-            "app.main:app", host=HOST, port=PORT, reload=DEBUG, log_level="info"
-        )
-    else:
-        uvicorn.run("app.main:app", host=HOST, port=PORT, log_level="info")
+    from .api.envs import HOST, PORT
+    uvicorn.run("app.main:app", host=HOST, port=PORT, log_level="info")

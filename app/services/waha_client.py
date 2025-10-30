@@ -7,16 +7,8 @@ from functools import wraps
 import time
 
 import httpx
-from pydantic import ValidationError
 
 from ..api.envs import WAHA_API_KEY, WAHA_ENCRYPTION_KEY
-from ..api.models.chats import (
-    ChatListResponse,
-    Chat,
-    ChatResponse,
-    ErrorResponse,
-    WAHASessionInfo,
-)
 from ..utils.logging_config import LoggerMixin
 
 

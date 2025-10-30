@@ -92,10 +92,6 @@ with patch('redis.Redis') as mock_redis, \
     
     from app.main import app
 
-from app.services.waha_client import WAHAClient
-from app.services.cache import get_cache
-
-
 @pytest.fixture(scope="session")
 def event_loop():
     """Crea un event loop para toda la sesión de tests"""
