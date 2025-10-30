@@ -63,37 +63,37 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
             # Agregar headers de seguridad a la response
             self._add_security_headers(response)
-            
+
             # Remover headers que pueden revelar información del servidor
             self._remove_server_headers(response)
 
             # Agregar header de seguridad personalizado
             response.headers["X-Security-Headers"] = "enabled"
-            
+
             return response
-            
+
         except Exception as e:
             logger.error(f"Error in SecurityHeadersMiddleware: {str(e)}")
-            
+
             # En caso de error, continuar sin los headers de seguridad
             return await call_next(request)
-    
+
     def _add_security_headers(self, response: Response) -> None:
         """Añade todos los headers de seguridad necesarios"""
-        
+
         # Agregar todos los headers de seguridad definidos
         for header_name, header_value in self.security_headers.items():
             response.headers[header_name] = header_value
-    
+
     def _remove_server_headers(self, response: Response) -> None:
         """Remueve headers que revelan información del servidor"""
         headers_to_remove = [
             "Server",
-            "X-Powered-By", 
+            "X-Powered-By",
             "X-AspNet-Version",
-            "X-AspNetMvc-Version"
+            "X-AspNetMvc-Version",
         ]
-        
+
         for header in headers_to_remove:
             if header in response.headers:
                 del response.headers[header]

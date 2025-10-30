@@ -206,13 +206,15 @@ class RedisCache:
             # Agregar el prefijo al patrón
             full_pattern = f"{self.key_prefix}{pattern}"
             keys = self.redis_client.keys(full_pattern)
-            
+
             if not keys:
                 return 0
-                
+
             # Eliminar todas las claves encontradas
             deleted_count = self.redis_client.delete(*keys)
-            logger.debug(f"Eliminadas {deleted_count} claves con patrón: {full_pattern}")
+            logger.debug(
+                f"Eliminadas {deleted_count} claves con patrón: {full_pattern}"
+            )
             return deleted_count
         except (ConnectionError, TimeoutError, RedisError) as e:
             logger.error(f"Error eliminando patrón de Redis: {e}")

@@ -418,7 +418,7 @@ class WAHAClient(LoggerMixin):
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/{chat_id}/messages"
             params = {"limit": limit, "offset": offset}
-            
+
             logger.debug(f"Obteniendo mensajes: {url} con params: {params}")
 
             response = await self.client.get(url, params=params)
@@ -477,11 +477,8 @@ class WAHAClient(LoggerMixin):
         start_time = time.time()
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/{chat_id}/messages"
-            payload = {
-                "text": message,
-                "type": message_type
-            }
-            
+            payload = {"text": message, "type": message_type}
+
             logger.debug(f"Enviando mensaje: {url} con payload: {payload}")
 
             response = await self.client.post(url, json=payload)
@@ -518,7 +515,6 @@ class WAHAClient(LoggerMixin):
                 message_type=message_type,
             )
             raise WAHAConnectionError("No se pudo conectar con WAHA")
-
 
 
 # Instancia global del cliente (se inicializa cuando se necesite)

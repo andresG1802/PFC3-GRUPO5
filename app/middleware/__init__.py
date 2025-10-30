@@ -11,9 +11,9 @@ from .security import SecurityHeadersMiddleware
 from .rate_limiting import RateLimitingMiddleware
 
 __all__ = [
-    "ErrorHandlerMiddleware", 
-    "TimeoutMiddleware", 
+    "ErrorHandlerMiddleware",
+    "TimeoutMiddleware",
     "RateLimitMiddleware",
     "SecurityHeadersMiddleware",
-    "RateLimitingMiddleware"
+    "RateLimitingMiddleware",
 ]

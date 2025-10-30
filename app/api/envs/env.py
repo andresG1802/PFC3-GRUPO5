@@ -76,9 +76,7 @@ class Settings(BaseSettings):
     )
 
     # Configuración de Redis
-    redis_host: str = Field(
-        default="localhost", description="Host del servidor Redis"
-    )
+    redis_host: str = Field(default="localhost", description="Host del servidor Redis")
 
     redis_port: int = Field(
         default=6379,
@@ -87,13 +85,9 @@ class Settings(BaseSettings):
         description="Puerto del servidor Redis",
     )
 
-    redis_db: int = Field(
-        default=0, ge=0, le=15, description="Base de datos Redis"
-    )
+    redis_db: int = Field(default=0, ge=0, le=15, description="Base de datos Redis")
 
-    redis_password: str = Field(
-        default="", description="Contraseña del servidor Redis"
-    )
+    redis_password: str = Field(default="", description="Contraseña del servidor Redis")
 
     @field_validator("debug")
     @classmethod

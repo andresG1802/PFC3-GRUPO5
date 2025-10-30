@@ -188,7 +188,6 @@ async def get_chats(
         )
 
 
-
 @router.get(
     "/overview",
     summary="Obtener vista general de chats",
@@ -585,10 +584,10 @@ async def get_chat_messages(
     """
     try:
         logger.info(f"Obteniendo mensajes para chat: {chat_id}")
-        
+
         # Obtener mensajes desde WAHA
         messages_data = await waha_client.get_messages(chat_id, limit, offset)
-        
+
         # Normalizar mensajes
         messages = []
         for msg_data in messages_data.get("messages", []):
@@ -599,17 +598,17 @@ async def get_chat_messages(
                 from_me=msg_data.get("fromMe", False),
                 type=msg_data.get("type", "text"),
                 from_contact=msg_data.get("from"),
-                ack=msg_data.get("ack")
+                ack=msg_data.get("ack"),
             )
             messages.append(message)
-        
+
         response = MessagesListResponse(
             messages=messages,
             total=messages_data.get("total", 0),
             limit=limit,
-            offset=offset
+            offset=offset,
         )
-        
+
         logger.info(f"Mensajes obtenidos exitosamente: {len(messages)} mensajes")
         return response
 
@@ -658,20 +657,16 @@ async def get_chat_messages(
                     "example": {
                         "id": "msg_123456789",
                         "status": "sent",
-                        "timestamp": 1642234567
+                        "timestamp": 1642234567,
                     }
                 }
-            }
+            },
         },
         404: {
             "description": "Chat no encontrado",
             "content": {
-                "application/json": {
-                    "example": {
-                        "detail": "Chat no encontrado"
-                    }
-                }
-            }
+                "application/json": {"example": {"detail": "Chat no encontrado"}}
+            },
         },
         422: {
             "description": "Datos de entrada inválidos",
@@ -685,10 +680,10 @@ async def get_chat_messages(
                                     {
                                         "loc": ["body", "media_url"],
                                         "msg": "Los mensajes de tipo image requieren media_url",
-                                        "type": "value_error"
+                                        "type": "value_error",
                                     }
                                 ]
-                            }
+                            },
                         },
                         "missing_coordinates": {
                             "summary": "Coordenadas faltantes",
@@ -697,14 +692,14 @@ async def get_chat_messages(
                                     {
                                         "loc": ["body", "latitude"],
                                         "msg": "Los mensajes de ubicación requieren latitud",
-                                        "type": "value_error"
+                                        "type": "value_error",
                                     }
                                 ]
-                            }
-                        }
+                            },
+                        },
                     }
                 }
-            }
+            },
         },
         503: {"description": "Servicio WAHA no disponible"},
         500: {"description": "Error interno del servidor"},
@@ -712,11 +707,11 @@ async def get_chat_messages(
 )
 async def send_message(
     chat_id: str = Path(
-        ..., 
+        ...,
         description="ID único del chat",
         min_length=1,
         max_length=100,
-        pattern=r"^[a-zA-Z0-9@._-]+$"
+        pattern=r"^[a-zA-Z0-9@._-]+$",
     ),
     message_request: SendMessageRequest = ...,
     waha_client: WAHAClient = Depends(get_waha_dependency),
@@ -727,49 +722,58 @@ async def send_message(
     """
     try:
         logger.info(f"Enviando mensaje tipo '{message_request.type}' a chat: {chat_id}")
-        
+
         # Preparar datos del mensaje según el tipo
         message_data = {
             "text": message_request.message,
-            "type": message_request.type.value
+            "type": message_request.type.value,
         }
-        
+
         # Agregar campos específicos según el tipo de mensaje
         if message_request.type == MessageType.LOCATION:
-            message_data.update({
-                "latitude": message_request.latitude,
-                "longitude": message_request.longitude
-            })
-        
-        if message_request.type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
+            message_data.update(
+                {
+                    "latitude": message_request.latitude,
+                    "longitude": message_request.longitude,
+                }
+            )
+
+        if message_request.type in [
+            MessageType.IMAGE,
+            MessageType.VIDEO,
+            MessageType.AUDIO,
+            MessageType.DOCUMENT,
+        ]:
             message_data["media_url"] = message_request.media_url
             if message_request.caption:
                 message_data["caption"] = message_request.caption
             if message_request.filename:
                 message_data["filename"] = message_request.filename
-        
+
         # Agregar metadatos opcionales
         if message_request.reply_to:
             message_data["reply_to"] = message_request.reply_to
-        
+
         if message_request.metadata:
             message_data["metadata"] = message_request.metadata
-        
+
         # Enviar mensaje a través de WAHA
         result = await waha_client.send_message(
-            chat_id, 
-            message_request.message, 
+            chat_id,
+            message_request.message,
             message_request.type.value,
-            **{k: v for k, v in message_data.items() if k not in ["text", "type"]}
+            **{k: v for k, v in message_data.items() if k not in ["text", "type"]},
         )
-        
+
         response = SendMessageResponse(
             id=result.get("id", ""),
             status=result.get("status", "sent"),
-            timestamp=result.get("timestamp", 0)
+            timestamp=result.get("timestamp", 0),
         )
-        
-        logger.info(f"Mensaje '{message_request.type}' enviado exitosamente: {response.id}")
+
+        logger.info(
+            f"Mensaje '{message_request.type}' enviado exitosamente: {response.id}"
+        )
         return response
 
     except ValueError as e:

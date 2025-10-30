@@ -173,7 +173,7 @@ def configure_specific_loggers(level: int) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    
+
     # Silenciar logs de MongoDB/PyMongo
     logging.getLogger("pymongo").setLevel(logging.WARNING)
     logging.getLogger("motor").setLevel(logging.WARNING)
@@ -182,7 +182,7 @@ def configure_specific_loggers(level: int) -> None:
     logging.getLogger("pymongo.server").setLevel(logging.WARNING)
     logging.getLogger("pymongo.topology").setLevel(logging.WARNING)
     logging.getLogger("pymongo.serverSelection").setLevel(logging.WARNING)
-    
+
     # Silenciar otros loggers verbosos
     logging.getLogger("asyncio").setLevel(logging.WARNING)
     logging.getLogger("multipart").setLevel(logging.WARNING)
