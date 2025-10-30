@@ -323,14 +323,9 @@ async def clear_presence_cache(
     try:
         cache = get_cache()
 
-        # Buscar y eliminar todas las entradas de presencia
+        # Buscar y eliminar todas las entradas de presencia usando delete_pattern
         pattern = "presence:*"
-        presence_keys = cache.get_keys_by_pattern(pattern)
-
-        cleared_count = 0
-        for key in presence_keys:
-            cache.delete(key)
-            cleared_count += 1
+        cleared_count = cache.delete_pattern(pattern)
 
         logger.info(
             f"Cache de presencias limpiado - {cleared_count} entradas eliminadas"

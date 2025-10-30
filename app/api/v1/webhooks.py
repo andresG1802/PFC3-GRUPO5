@@ -236,22 +236,25 @@ async def get_recent_events(limit: int = 10) -> Dict[str, Any]:
     try:
         cache = get_cache()
 
-        # Buscar eventos recientes
-        pattern = "webhook_event:*"
-        event_keys = cache.get_keys_by_pattern(pattern)
+        # Buscar eventos recientes (últimas 24 horas)
+        pattern = f"{cache.key_prefix}webhook_event:*"
+        event_keys = cache.redis_client.keys(pattern)
 
         # Ordenar por timestamp (más recientes primero)
         event_keys.sort(reverse=True)
 
         # Limitar resultados
-        event_keys = event_keys[:limit]
+        if limit:
+            event_keys = event_keys[:limit]
 
-        # Obtener datos de eventos
+        # Construir respuesta
         events = []
         for key in event_keys:
-            event_data = cache.get(key)
+            # Remover el prefijo para obtener la clave original
+            original_key = key.replace(cache.key_prefix, "")
+            event_data = cache.get(original_key)
             if event_data:
-                timestamp = key.replace("webhook_event:", "")
+                timestamp = original_key.replace("webhook_event:", "")
                 events.append(
                     {
                         "timestamp": timestamp,
@@ -295,14 +298,9 @@ async def clear_webhook_events() -> Dict[str, Any]:
     try:
         cache = get_cache()
 
-        # Buscar y eliminar todos los eventos
+        # Buscar y eliminar todos los eventos usando delete_pattern
         pattern = "webhook_event:*"
-        event_keys = cache.get_keys_by_pattern(pattern)
-
-        cleared_count = 0
-        for key in event_keys:
-            cache.delete(key)
-            cleared_count += 1
+        cleared_count = cache.delete_pattern(pattern)
 
         logger.info(f"Limpiados {cleared_count} eventos de webhook")
 
