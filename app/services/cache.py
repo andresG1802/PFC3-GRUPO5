@@ -23,7 +23,7 @@ class RedisCache:
 
     def __init__(
         self,
-        host: str = "localhost",
+        host: str = "redis",
         port: int = 6379,
         db: int = 0,
         password: Optional[str] = None,
@@ -193,6 +193,32 @@ class RedisCache:
         except (ConnectionError, TimeoutError, RedisError) as e:
             logger.error(f"Error eliminando de Redis: {e}")
             return False
+
+    def delete_pattern(self, pattern: str) -> int:
+        """
+        Elimina todas las claves que coinciden con un patrón
+
+        Args:
+            pattern: Patrón de búsqueda (ej: "chats:*", "chat:*")
+
+        Returns:
+            Número de claves eliminadas
+        """
+        try:
+            # Agregar el prefijo al patrón
+            full_pattern = f"{self.key_prefix}{pattern}"
+            keys = self.redis_client.keys(full_pattern)
+            
+            if not keys:
+                return 0
+                
+            # Eliminar todas las claves encontradas
+            deleted_count = self.redis_client.delete(*keys)
+            logger.debug(f"Eliminadas {deleted_count} claves con patrón: {full_pattern}")
+            return deleted_count
+        except (ConnectionError, TimeoutError, RedisError) as e:
+            logger.error(f"Error eliminando patrón de Redis: {e}")
+            return 0
 
     def clear(self) -> int:
         """

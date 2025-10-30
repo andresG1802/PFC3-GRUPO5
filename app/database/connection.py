@@ -44,7 +44,7 @@ def get_mongodb_url() -> str:
         # Fuera de Docker, usar localhost con el puerto mapeado
         host = "localhost"
         # Obtener el puerto mapeado desde docker ps o usar el puerto por defecto
-        port = "63445"  # Puerto mapeado actual según docker ps
+        port = "65497"  # Puerto mapeado actual según docker ps
         logger.info(f"Conectando a MongoDB localmente: {host}:{port}")
 
     return f"mongodb://{MONGO_INITDB_ROOT_USERNAME}:{MONGO_INITDB_ROOT_PASSWORD}@{host}:{port}/{MONGO_INITDB_DATABASE}?authSource=admin"

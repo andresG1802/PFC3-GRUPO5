@@ -86,7 +86,7 @@ class WAHAClient(LoggerMixin):
     """Cliente para comunicación con WAHA API"""
 
     def __init__(
-        self, base_url: str = "http://waha:3000", session_name: str = "default"
+        self, base_url: str = "http://waha:8000", session_name: str = "default"
     ):
         """
         Inicializa el cliente WAHA
@@ -407,6 +407,127 @@ class WAHAClient(LoggerMixin):
                 "picture_url": None,
             }
 
+    @retry_on_failure(max_retries=3, delay=1.0)
+    async def get_messages(
+        self, chat_id: str, limit: int = 20, offset: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Obtiene mensajes de un chat específico
+
+        Args:
+            chat_id: ID del chat
+            limit: Número máximo de mensajes a obtener
+            offset: Número de mensajes a omitir
+
+        Returns:
+            Dict con mensajes y total
+        """
+        start_time = time.time()
+        try:
+            url = f"{self.base_url}/api/{self.session_name}/chats/{chat_id}/messages"
+            params = {"limit": limit, "offset": offset}
+            
+            logger.debug(f"Obteniendo mensajes: {url} con params: {params}")
+
+            response = await self.client.get(url, params=params)
+            data = self._handle_response(response)
+
+            duration_ms = (time.time() - start_time) * 1000
+            self.log_operation(
+                "get_messages_success",
+                duration_ms=duration_ms,
+                chat_id=chat_id,
+                limit=limit,
+                offset=offset,
+                total=data.get("total", 0),
+            )
+
+            return data
+
+        except httpx.TimeoutException as e:
+            duration_ms = (time.time() - start_time) * 1000
+            self.log_error(
+                "get_messages_timeout",
+                e,
+                duration_ms=duration_ms,
+                chat_id=chat_id,
+                limit=limit,
+                offset=offset,
+            )
+            raise WAHATimeoutError("Timeout al obtener mensajes")
+        except httpx.ConnectError as e:
+            duration_ms = (time.time() - start_time) * 1000
+            self.log_error(
+                "get_messages_connection",
+                e,
+                duration_ms=duration_ms,
+                chat_id=chat_id,
+                limit=limit,
+                offset=offset,
+            )
+            raise WAHAConnectionError("No se pudo conectar con WAHA")
+
+    @retry_on_failure(max_retries=3, delay=1.0)
+    async def send_message(
+        self, chat_id: str, message: str, message_type: str = "text"
+    ) -> Dict[str, Any]:
+        """
+        Envía un mensaje a un chat específico
+
+        Args:
+            chat_id: ID del chat
+            message: Contenido del mensaje
+            message_type: Tipo de mensaje (text, image, etc.)
+
+        Returns:
+            Dict con información del mensaje enviado
+        """
+        start_time = time.time()
+        try:
+            url = f"{self.base_url}/api/{self.session_name}/chats/{chat_id}/messages"
+            payload = {
+                "text": message,
+                "type": message_type
+            }
+            
+            logger.debug(f"Enviando mensaje: {url} con payload: {payload}")
+
+            response = await self.client.post(url, json=payload)
+            data = self._handle_response(response)
+
+            duration_ms = (time.time() - start_time) * 1000
+            self.log_operation(
+                "send_message_success",
+                duration_ms=duration_ms,
+                chat_id=chat_id,
+                message_type=message_type,
+                message_id=data.get("id"),
+            )
+
+            return data
+
+        except httpx.TimeoutException as e:
+            duration_ms = (time.time() - start_time) * 1000
+            self.log_error(
+                "send_message_timeout",
+                e,
+                duration_ms=duration_ms,
+                chat_id=chat_id,
+                message_type=message_type,
+            )
+            raise WAHATimeoutError("Timeout al enviar mensaje")
+        except httpx.ConnectError as e:
+            duration_ms = (time.time() - start_time) * 1000
+            self.log_error(
+                "send_message_connection",
+                e,
+                duration_ms=duration_ms,
+                chat_id=chat_id,
+                message_type=message_type,
+            )
+            raise WAHAConnectionError("No se pudo conectar con WAHA")
+
+
 
 # Instancia global del cliente (se inicializa cuando se necesite)
 _waha_client: Optional[WAHAClient] = None
@@ -425,7 +546,7 @@ async def get_waha_client() -> WAHAClient:
         # Detectar si estamos en Docker o local
         try:
             # Intentar conectar con el servicio Docker primero
-            _waha_client = WAHAClient("http://waha:3000")
+            _waha_client = WAHAClient("http://waha:8000")
             await _waha_client.get_session_status()
             logger.info("Conectado a WAHA via Docker")
         except:

@@ -18,7 +18,13 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     expires_in: int
-    asesor_id: int
+    asesor_id: str
+
+
+class SimpleTokenResponse(BaseModel):
+    """Modelo simplificado para respuesta de token - solo contiene el token"""
+
+    access_token: str
 
 
 class AsesorInfo(BaseModel):

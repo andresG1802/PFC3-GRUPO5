@@ -5,6 +5,7 @@ Interactions - Endpoints para gestión de interacciones
 from fastapi import APIRouter, HTTPException, Query, Path, status, Depends
 from typing import Optional
 from datetime import datetime
+import logging
 
 # Importar modelos desde el módulo centralizado
 from ..models.interactions import (
@@ -17,6 +18,9 @@ from .auth import get_current_user
 
 # Configurar router con tags a nivel de clase
 router = APIRouter(tags=["Interactions"])
+
+# Configurar logger
+logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=InteractionListResponse)
@@ -50,9 +54,31 @@ async def get_interactions(
         interactions = InteractionModel.find_all(skip=skip, limit=limit, state=state)
 
         # Convertir a formato de respuesta
-        interaction_responses = [
-            InteractionResponse(**interaction) for interaction in interactions
-        ]
+        interaction_responses = []
+        for interaction in interactions:
+            try:
+                # Asegurar que el campo id esté mapeado correctamente desde _id
+                if "_id" in interaction:
+                    interaction["id"] = interaction["_id"]
+                
+                # Validar que los campos requeridos estén presentes
+                if "chat_id" not in interaction:
+                    raise ValueError(f"Campo 'chat_id' faltante en interaction {interaction.get('_id', 'unknown')}")
+                
+                if "timeline" not in interaction or not interaction["timeline"]:
+                    raise ValueError(f"Campo 'timeline' faltante o vacío en interaction {interaction.get('_id', 'unknown')}")
+                
+                # Validar que cada entrada del timeline tenga timestamp
+                for i, entry in enumerate(interaction["timeline"]):
+                    if "timestamp" not in entry:
+                        raise ValueError(f"Campo 'timestamp' faltante en timeline[{i}] de interaction {interaction.get('_id', 'unknown')}")
+                
+                interaction_responses.append(InteractionResponse(**interaction))
+            except Exception as e:
+                logger.error(f"Error al procesar interaction {interaction.get('_id', 'unknown')}: {str(e)}")
+                logger.error(f"Datos de la interaction: {interaction}")
+                # Continuar con las demás interactions en lugar de fallar completamente
+                continue
 
         # Calcular metadatos de paginación
         count = len(interaction_responses)
@@ -72,7 +98,6 @@ async def get_interactions(
             page=page,
             total_pages=total_pages,
         )
-
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -106,6 +131,34 @@ async def get_interaction(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Interaction no encontrada",
             )
+
+        # Asegurar que el campo id esté mapeado correctamente desde _id
+        if "_id" in interaction:
+            interaction["id"] = interaction["_id"]
+        
+        # Validar que los campos requeridos estén presentes
+        if "chat_id" not in interaction:
+            logger.error(f"Campo 'chat_id' faltante en interaction {interaction_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Datos de interaction incompletos: falta chat_id",
+            )
+        
+        if "timeline" not in interaction or not interaction["timeline"]:
+            logger.error(f"Campo 'timeline' faltante o vacío en interaction {interaction_id}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Datos de interaction incompletos: falta timeline",
+            )
+        
+        # Validar que cada entrada del timeline tenga timestamp
+        for i, entry in enumerate(interaction["timeline"]):
+            if "timestamp" not in entry:
+                logger.error(f"Campo 'timestamp' faltante en timeline[{i}] de interaction {interaction_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Datos de interaction incompletos: falta timestamp en timeline[{i}]",
+                )
 
         return InteractionResponse(**interaction)
 

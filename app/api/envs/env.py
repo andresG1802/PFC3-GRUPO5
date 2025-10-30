@@ -75,6 +75,26 @@ class Settings(BaseSettings):
         default=30, ge=1, description="Tiempo de expiración del JWT en minutos"
     )
 
+    # Configuración de Redis
+    redis_host: str = Field(
+        default="localhost", description="Host del servidor Redis"
+    )
+
+    redis_port: int = Field(
+        default=6379,
+        ge=1,
+        le=65535,
+        description="Puerto del servidor Redis",
+    )
+
+    redis_db: int = Field(
+        default=0, ge=0, le=15, description="Base de datos Redis"
+    )
+
+    redis_password: str = Field(
+        default="", description="Contraseña del servidor Redis"
+    )
+
     @field_validator("debug")
     @classmethod
     def validate_debug(cls, v):

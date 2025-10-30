@@ -173,11 +173,28 @@ def configure_specific_loggers(level: int) -> None:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    
+    # Silenciar logs de MongoDB/PyMongo
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
+    logging.getLogger("motor").setLevel(logging.WARNING)
+    logging.getLogger("pymongo.command").setLevel(logging.WARNING)
+    logging.getLogger("pymongo.connection").setLevel(logging.WARNING)
+    logging.getLogger("pymongo.server").setLevel(logging.WARNING)
+    logging.getLogger("pymongo.topology").setLevel(logging.WARNING)
+    logging.getLogger("pymongo.serverSelection").setLevel(logging.WARNING)
+    
+    # Silenciar otros loggers verbosos
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("multipart").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("aiofiles").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
     # En desarrollo, mostrar más detalles de FastAPI
     if DEBUG:
         logging.getLogger("uvicorn").setLevel(logging.INFO)
-        logging.getLogger("fastapi").setLevel(logging.DEBUG)
+        logging.getLogger("fastapi").setLevel(logging.INFO)
     else:
         logging.getLogger("uvicorn").setLevel(logging.WARNING)
         logging.getLogger("fastapi").setLevel(logging.WARNING)
@@ -278,7 +295,8 @@ def log_request_context(request_id: str, user_id: Optional[str] = None):
 # Configuración por defecto
 def init_logging():
     """Inicializa el logging con configuración por defecto"""
-    log_level = "DEBUG" if DEBUG else "INFO"
+    # Usar WARNING como nivel por defecto para reducir verbosidad
+    log_level = "INFO" if DEBUG else "WARNING"
     log_file = "logs/app.log" if not DEBUG else None
 
     setup_logging(

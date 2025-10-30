@@ -45,32 +45,7 @@ async def lifespan(app: FastAPI):
 # Crear aplicación FastAPI
 app = FastAPI(
     title="ARU-LINK WhatsApp API",
-    description="""
-    ## API Backend para gestión de chats de WhatsApp
-    
-    Esta API proporciona endpoints para interactuar con chats de WhatsApp a través de WAHA (WhatsApp HTTP API).
-    
-    ### Características principales:
-    - 🚀 **Alto rendimiento** con sistema de caché inteligente
-    - 🔒 **Seguridad robusta** con autenticación por API Key
-    - 📊 **Logging completo** para monitoreo y debugging
-    - ⚡ **Manejo de errores** robusto con reintentos automáticos
-    - 📱 **Gestión completa de chats** individuales y grupales
-    - 🔄 **Rate limiting** para protección contra abuso
-    
-    ### Endpoints disponibles:
-    - **Chats**: Gestión completa de conversaciones
-    - **Auth**: Autenticación y autorización
-    - **Health**: Monitoreo del estado del sistema
-    - **Interactions**: Gestión de interacciones del bot
-    
-    ### Tecnologías:
-    - FastAPI + Python 3.9+
-    - MongoDB para persistencia
-    - WAHA para integración con WhatsApp
-    - Sistema de caché en memoria
-    - Logging estructurado con JSON
-    """,
+    description="API Backend para Aru-Link",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -100,8 +75,8 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=100)
 
 app.include_router(auth_router, prefix="/auth")
 app.include_router(health_router, prefix="/health")
-app.include_router(interactions_router, prefix="/interactions")
-app.include_router(chats_router, prefix="/api/chats")
+app.include_router(interactions_router, prefix="/api/v1/interactions")
+app.include_router(chats_router, prefix="/api/v1/chats")
 
 if __name__ == "__main__":
     import uvicorn

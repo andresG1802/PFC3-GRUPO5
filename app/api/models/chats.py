@@ -2,7 +2,7 @@
 Modelos Pydantic para el router de Chats
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Any, Dict
 from datetime import datetime
 from enum import Enum
@@ -122,6 +122,157 @@ class ChatResponse(BaseModel):
     message: str = Field(
         "Chat obtenido exitosamente", description="Mensaje de respuesta"
     )
+
+
+class Message(BaseModel):
+    """Modelo para mensaje individual"""
+
+    id: str = Field(..., description="ID único del mensaje")
+    body: Optional[str] = Field(None, description="Contenido del mensaje")
+    timestamp: int = Field(..., description="Timestamp del mensaje")
+    from_me: bool = Field(..., description="Mensaje enviado por mí")
+    type: MessageType = Field(..., description="Tipo de mensaje")
+    from_contact: Optional[str] = Field(None, description="ID del contacto remitente", alias="from")
+    ack: Optional[MessageAck] = Field(None, description="Estado de confirmación")
+
+
+class MessagesListResponse(BaseModel):
+    """Respuesta para lista de mensajes con paginación"""
+
+    messages: List[Message] = Field(..., description="Lista de mensajes")
+    total: int = Field(..., description="Total de mensajes disponibles")
+    limit: int = Field(..., description="Límite aplicado")
+    offset: int = Field(..., description="Desplazamiento aplicado")
+
+
+class SendMessageRequest(BaseModel):
+    """Solicitud para enviar mensaje"""
+
+    message: str = Field(
+        ..., 
+        min_length=1, 
+        max_length=4096,
+        description="Contenido del mensaje",
+        example="Hola, ¿cómo estás?"
+    )
+    type: MessageType = Field(
+        MessageType.TEXT, 
+        description="Tipo de mensaje"
+    )
+    
+    # Campos opcionales para metadatos
+    reply_to: Optional[str] = Field(
+        None,
+        description="ID del mensaje al que se responde",
+        example="msg_123456789"
+    )
+    
+    # Para mensajes de ubicación
+    latitude: Optional[float] = Field(
+        None,
+        ge=-90,
+        le=90,
+        description="Latitud para mensajes de ubicación"
+    )
+    longitude: Optional[float] = Field(
+        None,
+        ge=-180,
+        le=180,
+        description="Longitud para mensajes de ubicación"
+    )
+    
+    # Para mensajes multimedia
+    media_url: Optional[str] = Field(
+        None,
+        description="URL del archivo multimedia",
+        example="https://example.com/image.jpg"
+    )
+    filename: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Nombre del archivo para documentos",
+        example="documento.pdf"
+    )
+    caption: Optional[str] = Field(
+        None,
+        max_length=1024,
+        description="Descripción para archivos multimedia",
+        example="Imagen del producto"
+    )
+    
+    # Metadatos adicionales
+    metadata: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Metadatos adicionales del mensaje"
+    )
+    
+    class Config:
+        json_schema_extra = {
+            "examples": [
+                {
+                    "message": "Hola, ¿cómo estás?",
+                    "type": "text"
+                },
+                {
+                    "message": "Aquí tienes la imagen",
+                    "type": "image",
+                    "media_url": "https://example.com/image.jpg",
+                    "caption": "Imagen del producto"
+                },
+                {
+                    "message": "Mi ubicación actual",
+                    "type": "location",
+                    "latitude": -34.6037,
+                    "longitude": -58.3816
+                }
+            ]
+        }
+    
+    @field_validator('latitude', 'longitude')
+    @classmethod
+    def validate_location_fields(cls, v, info):
+        """Valida que los campos de ubicación estén completos"""
+        if info.data.get('type') == MessageType.LOCATION:
+            if info.field_name == 'latitude' and v is None:
+                raise ValueError("Los mensajes de ubicación requieren latitud")
+            if info.field_name == 'longitude' and v is None:
+                raise ValueError("Los mensajes de ubicación requieren longitud")
+        return v
+    
+    @field_validator('media_url')
+    @classmethod
+    def validate_media_url(cls, v, info):
+        """Valida que media_url esté presente para mensajes multimedia"""
+        message_type = info.data.get('type')
+        if message_type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
+            if not v:
+                raise ValueError(f"Los mensajes de tipo {message_type} requieren media_url")
+        return v
+    
+    @field_validator('message')
+    @classmethod
+    def validate_message_content(cls, v, info):
+        """Valida el contenido del mensaje según el tipo"""
+        message_type = info.data.get('type', MessageType.TEXT)
+        
+        # Para mensajes de texto, validar que no esté vacío después de strip
+        if message_type == MessageType.TEXT:
+            if not v or not v.strip():
+                raise ValueError("El contenido del mensaje no puede estar vacío")
+        
+        # Para mensajes de ubicación, el mensaje puede ser opcional
+        if message_type == MessageType.LOCATION and not v:
+            return "Ubicación compartida"
+            
+        return v.strip() if v else v
+
+
+class SendMessageResponse(BaseModel):
+    """Respuesta para envío de mensaje"""
+
+    id: str = Field(..., description="ID del mensaje enviado")
+    status: str = Field(..., description="Estado del envío")
+    timestamp: int = Field(..., description="Timestamp del envío")
 
 
 class ErrorResponse(BaseModel):

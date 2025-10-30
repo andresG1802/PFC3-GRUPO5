@@ -14,6 +14,7 @@ import hashlib
 from ..models.auth import (
     LoginRequest,
     TokenResponse,
+    SimpleTokenResponse,
     ChangePasswordRequest,
     RegisterAsesorRequest,
     RegisterAsesorResponse,
@@ -97,7 +98,7 @@ def get_current_admin(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=SimpleTokenResponse)
 async def login(login_data: LoginRequest):
     """
     Autentica un asesor y retorna un token de acceso
@@ -106,7 +107,7 @@ async def login(login_data: LoginRequest):
         login_data: Credenciales de login
 
     Returns:
-        TokenResponse: Token de acceso y información relacionada
+        SimpleTokenResponse: Token de acceso
 
     Raises:
         HTTPException: Si las credenciales son inválidas
@@ -131,12 +132,7 @@ async def login(login_data: LoginRequest):
         expires_delta=access_token_expires,
     )
 
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=JWT_EXPIRE_MINUTES * 60,
-        asesor_id=current_user["_id"],
-    )
+    return SimpleTokenResponse(access_token=access_token)
 
 
 @router.post("/register", response_model=RegisterAsesorResponse)
@@ -286,4 +282,9 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
         expires_delta=access_token_expires,
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=JWT_EXPIRE_MINUTES * 60,
+        asesor_id=str(current_user["_id"]),
+    )

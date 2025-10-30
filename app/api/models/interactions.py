@@ -46,6 +46,19 @@ class InteractionBase(BaseModel):
     )
 
 
+class InteractionCreate(BaseModel):
+    """Modelo para crear una nueva interaction"""
+
+    chat_id: str = Field(..., description="ID del chat")
+    phone: str = Field(..., description="Número de teléfono", pattern=r"^\+\d{10,15}$")
+    state: InteractionState = Field(
+        default=InteractionState.MENUS, description="Estado inicial"
+    )
+    route: str = Field(..., description="Ruta inicial")
+    step: int = Field(default=1, description="Paso inicial")
+    lang: Optional[str] = Field(default="es", description="Idioma (es, qu)")
+
+
 class InteractionUpdate(BaseModel):
     """Modelo para actualizar una interaction"""
 

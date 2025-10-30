@@ -1,7 +1,7 @@
 """Endpoints para gestión de chats de WhatsApp"""
 
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
-from typing import List, Dict, Any
+from typing import Dict, Any
 from datetime import datetime
 
 from ...services.waha_client import (
@@ -24,9 +24,13 @@ from ..models.chats import (
     ChatListResponse,
     ChatResponse,
     ErrorResponse,
-    ChatFilters,
+    MessagesListResponse,
+    SendMessageRequest,
+    SendMessageResponse,
+    Message,
 )
 from ...utils.logging_config import get_logger
+from .auth import get_current_user, get_current_admin
 
 # Logger específico para este módulo
 logger = get_logger(__name__)
@@ -47,11 +51,54 @@ async def get_waha_dependency() -> WAHAClient:
         )
 
 
+@router.delete(
+    "/cache",
+    status_code=status.HTTP_200_OK,
+    summary="Limpiar cache de chats",
+    description="""
+    Limpia completamente el cache interno de chats para forzar la actualización de datos.
+    
+    **Uso:** Desarrollo, testing, troubleshooting de datos obsoletos y liberación de memoria.
+    """,
+    responses={
+        200: {
+            "description": "Cache limpiado exitosamente",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "message": "Cache de chats limpiado exitosamente",
+                        "cleared_entries": 45,
+                        "timestamp": "2024-01-15T10:30:00.123456",
+                    }
+                }
+            },
+        }
+    },
+    tags=["Cache", "Admin"],
+)
+async def clear_chat_cache(
+    current_admin: dict = Depends(get_current_admin),
+) -> Dict[str, Any]:
+    """
+    Limpia el cache de chats
+    """
+    cache = get_cache()
+    cleared_entries = cache.clear()
+
+    logger.info(f"Cache de chats limpiado - {cleared_entries} entradas eliminadas")
+
+    return {
+        "message": "Cache de chats limpiado exitosamente",
+        "cleared_entries": cleared_entries,
+        "timestamp": datetime.now().isoformat(),
+    }
+
+
 @router.get(
-    "/",
+    "",
     response_model=ChatListResponse,
     summary="Obtener lista de chats",
-    description="Obtiene una lista paginada de chats de WhatsApp desde WAHA API con caché optimizado",
+    description="Obtiene una lista paginada de chats de WhatsApp desde WAHA API con caché optimizado.",
     responses={
         200: {"description": "Lista de chats obtenida exitosamente"},
         503: {"description": "Servicio WAHA no disponible"},
@@ -65,6 +112,7 @@ async def get_chats(
     ),
     offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
     waha_client: WAHAClient = Depends(get_waha_dependency),
+    current_user: dict = Depends(get_current_user),
 ) -> ChatListResponse:
     """
     Obtiene todos los chats con paginación
@@ -140,46 +188,14 @@ async def get_chats(
         )
 
 
+
 @router.get(
     "/overview",
     summary="Obtener vista general de chats",
     description="""
     Obtiene una vista general optimizada de chats con información básica.
     
-    **Características:**
-    - Respuesta más rápida que el endpoint completo
-    - Solo información esencial de cada chat
-    - Ideal para listados y navegación
-    - Cache optimizado de 5 minutos
-    
-    **Parámetros:**
-    - `limit`: Número máximo de chats (1-100, por defecto 20)
-    - `offset`: Desplazamiento para paginación (por defecto 0)
-    
-    **Respuesta:**
-    ```json
-    {
-        "success": true,
-        "data": {
-            "summary": {
-                "total_chats": 25,
-                "limit": 20,
-                "offset": 0
-            },
-            "chats": [
-                {
-                    "id": "5491234567890@c.us",
-                    "name": "Juan Pérez",
-                    "unread_count": 3,
-                    "last_message_time": "2024-01-15T10:30:00Z",
-                    "is_group": false,
-                    "is_archived": false
-                }
-            ]
-        },
-        "message": "Overview de chats obtenido exitosamente"
-    }
-    ```
+    **Características:** Respuesta más rápida que el endpoint completo, solo información esencial de cada chat, ideal para listados y navegación con cache optimizado de 5 minutos.
     """,
     responses={
         200: {
@@ -218,6 +234,7 @@ async def get_chats_overview(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     waha_client: WAHAClient = Depends(get_waha_dependency),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Obtiene vista general de chats optimizada
@@ -312,15 +329,7 @@ async def get_chats_overview(
     description="""
     Obtiene información detallada de un chat específico por su ID.
     
-    **Características:**
-    - Información completa del chat
-    - Detalles del contacto o grupo
-    - Último mensaje si está disponible
-    - Cache optimizado de 10 minutos
-    
-    **Formato del chat_id:**
-    - Para contactos individuales: `5491234567890@c.us`
-    - Para grupos: `120363123456789012@g.us`
+    **Incluye:** Información completa del chat, detalles del contacto o grupo, último mensaje si está disponible y cache optimizado de 10 minutos.
     """,
     responses={
         200: {
@@ -386,6 +395,7 @@ async def get_chat_by_id(
         pattern=r"^[a-zA-Z0-9@._-]+$",
     ),
     waha_client: WAHAClient = Depends(get_waha_dependency),
+    current_user: dict = Depends(get_current_user),
 ) -> ChatResponse:
     """
     Obtiene un chat específico por ID
@@ -459,56 +469,6 @@ async def get_chat_by_id(
         )
 
 
-@router.delete(
-    "/cache",
-    status_code=status.HTTP_200_OK,
-    summary="Limpiar cache de chats",
-    description="""
-    Limpia completamente el cache interno de chats para forzar la actualización de datos.
-    
-    **Casos de uso:**
-    - Desarrollo y testing
-    - Troubleshooting de datos obsoletos
-    - Forzar actualización después de cambios en WAHA
-    - Liberación de memoria en producción
-    
-    **Impacto:**
-    - Todas las próximas consultas irán directamente a WAHA
-    - Posible aumento temporal en latencia
-    - Liberación inmediata de memoria cache
-    """,
-    responses={
-        200: {
-            "description": "Cache limpiado exitosamente",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "message": "Cache de chats limpiado exitosamente",
-                        "cleared_entries": 45,
-                        "timestamp": "2024-01-15T10:30:00.123456",
-                    }
-                }
-            },
-        }
-    },
-    tags=["Cache", "Admin"],
-)
-async def clear_chat_cache() -> Dict[str, Any]:
-    """
-    Limpia el cache de chats
-    """
-    cache = get_cache()
-    cleared_entries = cache.clear()
-
-    logger.info(f"Cache de chats limpiado - {cleared_entries} entradas eliminadas")
-
-    return {
-        "message": "Cache de chats limpiado exitosamente",
-        "cleared_entries": cleared_entries,
-        "timestamp": datetime.now().isoformat(),
-    }
-
-
 @router.get(
     "/health/status",
     status_code=status.HTTP_200_OK,
@@ -516,17 +476,9 @@ async def clear_chat_cache() -> Dict[str, Any]:
     description="""
     Verifica el estado completo de salud del servicio de chats y todos sus componentes.
     
-    **Componentes verificados:**
-    - 🔗 Conectividad con WAHA
-    - 📱 Estado de la sesión de WhatsApp
-    - 💾 Estadísticas del sistema de caché
-    - ⚡ Rendimiento del servicio
+    **Componentes verificados:** Conectividad con WAHA, estado de la sesión de WhatsApp, estadísticas del sistema de caché y rendimiento del servicio.
     
-    **Información incluida:**
-    - Estado de la conexión WAHA
-    - Información de la sesión activa
-    - Métricas de caché (hits, misses, tamaño)
-    - Timestamp de la verificación
+    **Información incluida:** Estado de la conexión WAHA, información de la sesión activa, métricas de caché y timestamp de la verificación.
     """,
     responses={
         200: {
@@ -572,6 +524,7 @@ async def clear_chat_cache() -> Dict[str, Any]:
 )
 async def get_chat_service_health(
     waha_client: WAHAClient = Depends(get_waha_dependency),
+    current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
     Verifica el estado de salud del servicio de chats
@@ -599,4 +552,254 @@ async def get_chat_service_health(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Servicio de chats no disponible",
+        )
+
+
+@router.get(
+    "/{chat_id}/messages",
+    response_model=MessagesListResponse,
+    summary="Obtener mensajes de un chat",
+    description="""
+    Obtiene los mensajes de un chat específico con paginación.
+    
+    **Características:** Lista paginada de mensajes ordenados por timestamp (más recientes primero) con información completa de cada mensaje y soporte para diferentes tipos.
+    """,
+    responses={
+        200: {"description": "Mensajes obtenidos exitosamente"},
+        404: {"description": "Chat no encontrado"},
+        503: {"description": "Servicio WAHA no disponible"},
+        500: {"description": "Error interno del servidor"},
+    },
+)
+async def get_chat_messages(
+    chat_id: str = Path(..., description="ID único del chat"),
+    limit: int = Query(
+        20, ge=1, le=100, description="Número máximo de mensajes a obtener"
+    ),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
+    waha_client: WAHAClient = Depends(get_waha_dependency),
+    current_user: dict = Depends(get_current_user),
+) -> MessagesListResponse:
+    """
+    Obtiene mensajes de un chat específico
+    """
+    try:
+        logger.info(f"Obteniendo mensajes para chat: {chat_id}")
+        
+        # Obtener mensajes desde WAHA
+        messages_data = await waha_client.get_messages(chat_id, limit, offset)
+        
+        # Normalizar mensajes
+        messages = []
+        for msg_data in messages_data.get("messages", []):
+            message = Message(
+                id=msg_data.get("id", ""),
+                body=msg_data.get("body"),
+                timestamp=msg_data.get("timestamp", 0),
+                from_me=msg_data.get("fromMe", False),
+                type=msg_data.get("type", "text"),
+                from_contact=msg_data.get("from"),
+                ack=msg_data.get("ack")
+            )
+            messages.append(message)
+        
+        response = MessagesListResponse(
+            messages=messages,
+            total=messages_data.get("total", 0),
+            limit=limit,
+            offset=offset
+        )
+        
+        logger.info(f"Mensajes obtenidos exitosamente: {len(messages)} mensajes")
+        return response
+
+    except WAHANotFoundError:
+        logger.warning(f"Chat no encontrado: {chat_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat no encontrado",
+        )
+    except WAHATimeoutError:
+        logger.error(f"Timeout obteniendo mensajes para chat: {chat_id}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Timeout en comunicación con WAHA",
+        )
+    except WAHAConnectionError:
+        logger.error(f"Error de conexión obteniendo mensajes para chat: {chat_id}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio WAHA no disponible",
+        )
+    except Exception as e:
+        logger.error(f"Error inesperado obteniendo mensajes: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor",
+        )
+
+
+@router.post(
+    "/{chat_id}/messages",
+    response_model=SendMessageResponse,
+    summary="Enviar mensaje a un chat",
+    description="""
+    Envía un mensaje a un chat específico con soporte para diferentes tipos de mensaje.
+    
+    **Tipos soportados:** texto, imagen, video, audio, documento, ubicación, contacto, sticker.
+    
+    **Validaciones:** Los mensajes multimedia requieren media_url, los de ubicación requieren coordenadas.
+    """,
+    responses={
+        200: {
+            "description": "Mensaje enviado exitosamente",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "id": "msg_123456789",
+                        "status": "sent",
+                        "timestamp": 1642234567
+                    }
+                }
+            }
+        },
+        404: {
+            "description": "Chat no encontrado",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "detail": "Chat no encontrado"
+                    }
+                }
+            }
+        },
+        422: {
+            "description": "Datos de entrada inválidos",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "missing_media_url": {
+                            "summary": "URL multimedia faltante",
+                            "value": {
+                                "detail": [
+                                    {
+                                        "loc": ["body", "media_url"],
+                                        "msg": "Los mensajes de tipo image requieren media_url",
+                                        "type": "value_error"
+                                    }
+                                ]
+                            }
+                        },
+                        "missing_coordinates": {
+                            "summary": "Coordenadas faltantes",
+                            "value": {
+                                "detail": [
+                                    {
+                                        "loc": ["body", "latitude"],
+                                        "msg": "Los mensajes de ubicación requieren latitud",
+                                        "type": "value_error"
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        503: {"description": "Servicio WAHA no disponible"},
+        500: {"description": "Error interno del servidor"},
+    },
+)
+async def send_message(
+    chat_id: str = Path(
+        ..., 
+        description="ID único del chat",
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9@._-]+$"
+    ),
+    message_request: SendMessageRequest = ...,
+    waha_client: WAHAClient = Depends(get_waha_dependency),
+    current_user: dict = Depends(get_current_user),
+) -> SendMessageResponse:
+    """
+    Envía un mensaje a un chat específico con validación completa
+    """
+    try:
+        logger.info(f"Enviando mensaje tipo '{message_request.type}' a chat: {chat_id}")
+        
+        # Preparar datos del mensaje según el tipo
+        message_data = {
+            "text": message_request.message,
+            "type": message_request.type.value
+        }
+        
+        # Agregar campos específicos según el tipo de mensaje
+        if message_request.type == MessageType.LOCATION:
+            message_data.update({
+                "latitude": message_request.latitude,
+                "longitude": message_request.longitude
+            })
+        
+        if message_request.type in [MessageType.IMAGE, MessageType.VIDEO, MessageType.AUDIO, MessageType.DOCUMENT]:
+            message_data["media_url"] = message_request.media_url
+            if message_request.caption:
+                message_data["caption"] = message_request.caption
+            if message_request.filename:
+                message_data["filename"] = message_request.filename
+        
+        # Agregar metadatos opcionales
+        if message_request.reply_to:
+            message_data["reply_to"] = message_request.reply_to
+        
+        if message_request.metadata:
+            message_data["metadata"] = message_request.metadata
+        
+        # Enviar mensaje a través de WAHA
+        result = await waha_client.send_message(
+            chat_id, 
+            message_request.message, 
+            message_request.type.value,
+            **{k: v for k, v in message_data.items() if k not in ["text", "type"]}
+        )
+        
+        response = SendMessageResponse(
+            id=result.get("id", ""),
+            status=result.get("status", "sent"),
+            timestamp=result.get("timestamp", 0)
+        )
+        
+        logger.info(f"Mensaje '{message_request.type}' enviado exitosamente: {response.id}")
+        return response
+
+    except ValueError as e:
+        # Errores de validación del modelo
+        logger.warning(f"Error de validación enviando mensaje: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except WAHANotFoundError:
+        logger.warning(f"Chat no encontrado para envío: {chat_id}")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat no encontrado",
+        )
+    except WAHATimeoutError:
+        logger.error(f"Timeout enviando mensaje a chat: {chat_id}")
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Timeout en comunicación con WAHA",
+        )
+    except WAHAConnectionError:
+        logger.error(f"Error de conexión enviando mensaje a chat: {chat_id}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Servicio WAHA no disponible",
+        )
+    except Exception as e:
+        logger.error(f"Error inesperado enviando mensaje: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor",
         )
