@@ -18,7 +18,6 @@ class InteractionState(str, Enum):
 class TimelineEntry(BaseModel):
     """Entrada del timeline de una interaction"""
 
-    timestamp: datetime = Field(..., description="Timestamp de la entrada")
     route: Optional[str] = None
     step: Optional[int] = None
     userInput: Optional[str] = None
@@ -40,7 +39,7 @@ class InteractionBase(BaseModel):
         description="Historial de interacciones",
         json_schema_extra={
             "example": [
-                {"timestamp": "2023-01-01T00:00:00", "route": "route_1", "step": 1}
+                {"route": "route_1", "step": 1, "userInput": "1"}
             ]
         },
     )

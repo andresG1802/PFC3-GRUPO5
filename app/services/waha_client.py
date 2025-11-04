@@ -214,7 +214,7 @@ class WAHAClient(LoggerMixin):
         start_time = time.time()
 
         try:
-            url = f"{self.base_url}/api/{self.session_name}/chats"
+            url = f"{self.base_url}/api/{self.session_name}/chats/overview"
             params = {"limit": limit, "offset": offset}
 
             self.log_operation("get_chats_request", url=url, limit=limit, offset=offset)

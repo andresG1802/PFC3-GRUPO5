@@ -31,6 +31,7 @@ from ..models.chats import (
 )
 from ...utils.logging_config import get_logger
 from .auth import get_current_user, get_current_admin
+from ...database.models import InteractionModel
 
 # Logger específico para este módulo
 logger = get_logger(__name__)
@@ -130,29 +131,114 @@ async def get_chats(
 
         logger.info(f"Obteniendo chats - limit: {limit}, offset: {offset}")
 
-        # Obtener chats desde WAHA
+        # Obtener chats desde WAHA (paginados) y normalizar a ChatOverview
         raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
 
-        # Normalizar datos
         normalized_chats = []
         for raw_chat in raw_chats:
             try:
                 normalized_data = waha_client._normalize_chat_data(raw_chat)
-                chat = Chat(**normalized_data)
-                normalized_chats.append(chat)
+                overview_data = {
+                    "id": normalized_data.get("id", ""),
+                    "name": normalized_data.get("name"),
+                    "type": normalized_data.get("type", "individual"),
+                    "timestamp": normalized_data.get("timestamp"),
+                    "unread_count": normalized_data.get("unread_count", 0),
+                    "last_message": normalized_data.get("last_message"),
+                    "picture_url": normalized_data.get("picture_url"),
+                    "archived": normalized_data.get("archived", False),
+                    "pinned": normalized_data.get("pinned", False),
+                }
+                chat_overview = ChatOverview(**overview_data)
+                normalized_chats.append(chat_overview)
             except Exception as e:
                 logger.warning(
                     f"Error normalizando chat {raw_chat.get('id', 'unknown')}: {e}"
                 )
                 continue
 
-        # Crear respuesta
+        # Integrate interactions with 'pending' state
+        try:
+            pending_total = InteractionModel.count_all(state="pending")
+            pending_interactions = (
+                InteractionModel.find_all(skip=0, limit=pending_total, state="pending")
+                if pending_total > 0
+                else []
+            )
+
+            # Build the set of ids for pending interactions using chat_id or phone
+            pending_ids = set()
+            for it in pending_interactions:
+                cid = it.get("chat_id") or it.get("phone")
+                if cid:
+                    pending_ids.add(cid)
+
+            # Filter WAHA chats to include only those with pending interactions
+            chats_by_id = {c.id: c for c in normalized_chats}
+            filtered_chats = [c for c in normalized_chats if c.id in pending_ids]
+
+            # Add minimal chats based on pending interactions that are not present in WAHA
+            for it in pending_interactions:
+                # Prefer chat_id; fallback to phone when chat_id is missing
+                chat_id = it.get("chat_id") or it.get("phone")
+                if not chat_id or chat_id in chats_by_id:
+                    continue
+
+                # Build a minimal ChatOverview from interaction data
+                created_at = it.get("createdAt")
+                timestamp = None
+                try:
+                    if created_at:
+                        # Convert datetime to unix timestamp (seconds)
+                        timestamp = int(created_at.timestamp())
+                except Exception:
+                    timestamp = None
+
+                minimal_chat_data = {
+                    "id": chat_id,
+                    "name": it.get("phone"),
+                    "type": "individual",
+                    "timestamp": timestamp,
+                    "unread_count": 0,
+                    "archived": False,
+                    "pinned": False,
+                    "muted": False,
+                    "contact": None,
+                    "last_message": None,
+                    "participants": None,
+                    "group_metadata": None,
+                    "picture_url": None,
+                }
+
+                try:
+                    fallback_chat = ChatOverview(**minimal_chat_data)
+                    filtered_chats.append(fallback_chat)
+                except Exception as e:
+                    logger.warning(
+                        f"Error creating chat from pending interaction {chat_id}: {e}"
+                    )
+
+            # Ordenar por timestamp descendente cuando esté disponible
+            def sort_key(c: ChatOverview):
+                return c.timestamp or 0
+
+            filtered_chats.sort(key=sort_key, reverse=True)
+
+            normalized_chats = filtered_chats
+        except Exception as e:
+            logger.warning(f"No se pudo integrar interacciones pendientes en chats: {e}")
+
+        # Aplicar paginación al resultado combinado
+        total_count = len(normalized_chats)
+        paged_chats = normalized_chats[offset : offset + limit]
+
+        # Crear respuesta (serialize chats for cache)
         response_data = {
-            "chats": normalized_chats,
-            "total": len(normalized_chats),
+            "chats": [chat.dict() for chat in paged_chats],
+            "total": total_count,
             "limit": limit,
             "offset": offset,
-            "has_more": len(normalized_chats) == limit,  # Estimación
+            "has_more": (offset + limit) < total_count,
             "timestamp": datetime.now().isoformat(),
         }
 

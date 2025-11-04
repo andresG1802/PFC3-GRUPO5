@@ -107,23 +107,22 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
     interactions_data = [
         {
             "chat_id": "chat_001",
-            "phone": "+59178123456",
+            "phone": "51948604478@c.us",
             "state": "menus",
             "route": "route_1",
             "step": 1,
             "lang": "es",
             "timeline": [
                 {
-                    "timestamp": base_time - timedelta(minutes=5),
                     "route": "route_1",
                     "step": 1,
-                    "userInput": "Inicio de conversación",
+                    "userInput": "1",
                 }
             ],
         },
         {
             "chat_id": "chat_002",
-            "phone": "+59178234567",
+            "phone": "51948604478@c.us",
             "state": "pending",
             "route": "route_2",
             "step": 3,
@@ -257,9 +256,9 @@ def seed_database():
         logger.info(f"Asesores procesados: {len(asesor_ids)}")
 
         # Crear interactions (solo en modo DEBUG)
-        interaction_ids = create_test_interactions(asesor_ids)
-        if interaction_ids:
-            logger.info(f"Interactions creadas: {len(interaction_ids)}")
+        # interaction_ids = create_test_interactions(asesor_ids)
+        # if interaction_ids:
+        #     logger.info(f"Interactions creadas: {len(interaction_ids)}")
 
         logger.info("Seeding completado exitosamente")
 
