@@ -81,6 +81,11 @@ class InteractionResponse(InteractionBase):
     assignedAt: Optional[datetime] = Field(
         default=None, description="Fecha de asignación del asesor"
     )
+    # Summary text generated from timeline entries and current route
+    summary: Optional[str] = Field(
+        default=None,
+        description="Generated textual summary based on timeline and route",
+    )
 
 
 class InteractionListResponse(BaseModel):
