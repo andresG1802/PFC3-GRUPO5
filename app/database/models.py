@@ -37,8 +37,8 @@ class InteractionModel:
         """
         collection = get_interactions_collection()
 
-        # Agregar timestamp de creación
-        interaction_data["createdAt"] = datetime.utcnow()
+        # Agregar timestamp de creación (timezone-aware UTC)
+        interaction_data["createdAt"] = datetime.now(timezone.utc)
 
         result = collection.insert_one(interaction_data)
         return str(result.inserted_id)
@@ -228,7 +228,7 @@ class InteractionModel:
         try:
             result = collection.update_one(
                 {"_id": ObjectId(interaction_id)},
-                {"$set": {"asesor_id": asesor_id, "assignedAt": datetime.utcnow()}},
+                {"$set": {"asesor_id": asesor_id, "assignedAt": timezone.utcnow()}},
             )
             return result.modified_count > 0
         except Exception:
@@ -301,7 +301,7 @@ class ChatModel:
         update = {"$set": {"chat_id": chat_id}}
         if interaction_id:
             update["$set"]["interaction_id"] = interaction_id
-        update["$setOnInsert"] = {"createdAt": datetime.utcnow()}
+        update["$setOnInsert"] = {"createdAt": datetime.now(timezone.utc)}
 
         result = collection.update_one({"_id": chat_id}, update, upsert=True)
         return (result.upserted_id is not None) or (result.modified_count > 0)
@@ -332,7 +332,7 @@ class ChatModel:
         normalized = {
             "id": message.get("id"),
             "body": message.get("body"),
-            "timestamp": message.get("timestamp", int(datetime.utcnow().timestamp())),
+            "timestamp": message.get("timestamp", int(datetime.now(timezone.utc).timestamp())),
             "type": message.get("type", "text"),
             "from_me": bool(message.get("from_me", False)),
             "ack": message.get("ack"),
@@ -388,7 +388,7 @@ class AsesorModel:
             "full_name": full_name,
             "role": role,  # Nuevo campo: "admin" o "asesor"
             "is_active": True,
-            "createdAt": datetime.utcnow(),
+            "createdAt": datetime.now(timezone.utc),
         }
         result = collection.insert_one(asesor_data)
         return result.inserted_id

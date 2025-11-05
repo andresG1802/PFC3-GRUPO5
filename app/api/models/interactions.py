@@ -1,6 +1,6 @@
 """Modelos Pydantic para interactions"""
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -71,9 +71,7 @@ class InteractionUpdate(BaseModel):
 class InteractionResponse(InteractionBase):
     """Modelo de respuesta para interaction"""
 
-    model_config = ConfigDict(
-        populate_by_name=True, json_encoders={datetime: lambda v: v.isoformat()}
-    )
+    model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(..., alias="_id", description="ID de la interaction")
     createdAt: datetime = Field(..., description="Fecha de creación")
@@ -86,6 +84,10 @@ class InteractionResponse(InteractionBase):
         default=None,
         description="Generated textual summary based on timeline and route",
     )
+
+    @field_serializer("createdAt", "assignedAt", when_used="json")
+    def _serialize_dt(self, v: datetime):
+        return v.isoformat() if v is not None else None
 
 
 class InteractionListResponse(BaseModel):
@@ -107,9 +109,13 @@ class InteractionListResponse(BaseModel):
 class AssignAsesorResponse(BaseModel):
     """Modelo de respuesta para asignación de asesor"""
 
-    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+    model_config = ConfigDict()
 
     message: str
     interaction_id: str
     asesor_id: str
     assignedAt: datetime
+
+    @field_serializer("assignedAt", when_used="json")
+    def _serialize_assigned(self, v: datetime):
+        return v.isoformat() if v is not None else None

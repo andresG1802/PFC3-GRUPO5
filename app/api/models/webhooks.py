@@ -2,7 +2,7 @@
 Modelos Pydantic para eventos de webhook de WAHA
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, Dict, Any
 from enum import Enum
 
@@ -71,8 +71,7 @@ class MessageEvent(BaseModel):
     quoted_msg_id: Optional[str] = Field(None, description="ID del mensaje citado")
     forwarded: Optional[bool] = Field(False, description="Mensaje reenviado")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class MessageAckEvent(BaseModel):
@@ -84,8 +83,7 @@ class MessageAckEvent(BaseModel):
     from_user: str = Field(..., alias="from", description="Remitente original")
     to: str = Field(..., description="Destinatario original")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class SessionStatusEvent(BaseModel):
@@ -96,8 +94,7 @@ class SessionStatusEvent(BaseModel):
     timestamp: int = Field(..., description="Timestamp del cambio")
     qr: Optional[str] = Field(None, description="Código QR (si aplica)")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class PresenceUpdateEvent(BaseModel):
@@ -107,8 +104,7 @@ class PresenceUpdateEvent(BaseModel):
     presence: PresenceStatus = Field(..., description="Estado de presencia")
     timestamp: int = Field(..., description="Timestamp de la actualización")
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class WebhookResponse(BaseModel):
@@ -136,12 +132,11 @@ class WebhookConfig(BaseModel):
     enabled: bool = Field(True, description="Webhook habilitado")
     secret: Optional[str] = Field(None, description="Secreto para validación")
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "example": {
                 "url": "https://mi-backend.com/api/v1/webhooks/waha",
                 "events": ["message", "message.ack", "session.status"],
                 "enabled": True,
                 "secret": "mi-secreto-webhook",
             }
-        }
+        })

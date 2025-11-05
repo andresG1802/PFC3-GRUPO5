@@ -18,7 +18,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record):
         log_entry = {
-            "timestamp": datetime.fromtimestamp(record.created).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -68,7 +68,7 @@ class ColoredFormatter(logging.Formatter):
 
         # Formato: [TIMESTAMP] LEVEL - MODULE.FUNCTION:LINE - MESSAGE
         formatted = (
-            f"{color}[{datetime.fromtimestamp(record.created).strftime('%H:%M:%S')}] "
+            f"{color}[{datetime.fromtimestamp(record.created, timezone.utc).strftime('%H:%M:%S')}] "
             f"{record.levelname:<8}{reset} - "
             f"{record.module}.{record.funcName}:{record.lineno} - "
             f"{record.getMessage()}"

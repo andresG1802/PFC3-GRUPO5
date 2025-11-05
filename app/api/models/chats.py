@@ -2,7 +2,7 @@
 Modelos Pydantic para el router de Chats
 """
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Any, Dict
 from enum import Enum
 
@@ -154,13 +154,12 @@ class SendMessageRequest(BaseModel):
         min_length=1,
         max_length=4096,
         description="Contenido del mensaje",
-        example="Hola, ¿cómo estás?",
     )
     type: MessageType = Field(MessageType.TEXT, description="Tipo de mensaje")
 
     # Campos opcionales para metadatos
     reply_to: Optional[str] = Field(
-        None, description="ID del mensaje al que se responde", example="msg_123456789"
+        None, description="ID del mensaje al que se responde"
     )
 
     # Para mensajes de ubicación
@@ -175,19 +174,16 @@ class SendMessageRequest(BaseModel):
     media_url: Optional[str] = Field(
         None,
         description="URL del archivo multimedia",
-        example="https://example.com/image.jpg",
     )
     filename: Optional[str] = Field(
         None,
         max_length=255,
         description="Nombre del archivo para documentos",
-        example="documento.pdf",
     )
     caption: Optional[str] = Field(
         None,
         max_length=1024,
         description="Descripción para archivos multimedia",
-        example="Imagen del producto",
     )
 
     # Metadatos adicionales
@@ -195,8 +191,7 @@ class SendMessageRequest(BaseModel):
         None, description="Metadatos adicionales del mensaje"
     )
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(json_schema_extra={
             "examples": [
                 {"message": "Hola, ¿cómo estás?", "type": "text"},
                 {
@@ -212,7 +207,7 @@ class SendMessageRequest(BaseModel):
                     "longitude": -58.3816,
                 },
             ]
-        }
+        })
 
     @field_validator("latitude", "longitude")
     @classmethod

@@ -207,7 +207,7 @@ async def get_contact_presence(
         cache.set(cache_key, presence_info.presence, ttl=300)
 
         return PresenceResponse(
-            presence=presence_info, timestamp=datetime.now().isoformat()
+            presence=presence_info, timestamp=datetime.now(timezone.utc).isoformat()
         )
 
     except WAHANotFoundError:
@@ -273,7 +273,7 @@ async def update_my_presence(
         )
 
         return PresenceResponse(
-            presence=presence_info, timestamp=datetime.now().isoformat()
+            presence=presence_info, timestamp=datetime.now(timezone.utc).isoformat()
         )
 
     except ValueError as e:

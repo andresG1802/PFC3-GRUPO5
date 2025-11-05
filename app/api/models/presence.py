@@ -2,7 +2,7 @@
 Modelos Pydantic para gestión de presencia de contactos
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 
 from .webhooks import PresenceStatus
@@ -36,6 +36,5 @@ class PresenceUpdateRequest(BaseModel):
     """Solicitud para actualizar presencia propia"""
 
     presence: PresenceStatus = Field(..., description="Nuevo estado de presencia")
-
-    class Config:
-        json_schema_extra = {"example": {"presence": "online"}}
+    
+    model_config = ConfigDict(json_schema_extra={"example": {"presence": "online"}})

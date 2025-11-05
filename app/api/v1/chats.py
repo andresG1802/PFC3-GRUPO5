@@ -626,7 +626,7 @@ async def get_chat_service_health(
             "waha_connection": "connected",
             "session_status": session_status.get("status", "unknown"),
             "cache_stats": cache_stats,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         logger.info("Health check exitoso para servicio de chats")

@@ -19,5 +19,5 @@ async def health_check():
         HealthResponse: Estado del servicio
     """
     return HealthResponse(
-        status="healthy", timestamp=datetime.now(), service="backend-api"
+        status="healthy", timestamp=datetime.now(timezone.utc), service="backend-api"
     )

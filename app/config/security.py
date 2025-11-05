@@ -4,14 +4,14 @@ Configuración centralizada de seguridad y rate limiting
 
 import json
 from typing import Dict, Optional
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 
 
 class SecurityConfig(BaseSettings):
     """Configuración de headers de seguridad"""
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Configuración del entorno
     environment: str = Field(default="development", alias="ENVIRONMENT")
@@ -63,13 +63,13 @@ class SecurityConfig(BaseSettings):
                 f"frame-ancestors {self.csp_frame_ancestors}"
             )
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    # Configuración cargada desde .env ya definida arriba
 
 
 class RateLimitConfig(BaseSettings):
     """Configuración de rate limiting"""
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Redis
     redis_host: str = Field(default="localhost", alias="REDIS_HOST")

@@ -102,7 +102,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
         return []
 
     # Obtener timestamp base para el timeline
-    base_time = datetime.utcnow()
+    base_time = datetime.now(timezone.utc)
 
     interactions_data = [
         {
@@ -142,7 +142,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
                 },
             ],  # Timeline muestra los pasos ANTERIORES que llevaron al step actual (3)
             "asesor_id": asesor_ids[1] if len(asesor_ids) > 1 else None,
-            "assignedAt": datetime.utcnow() - timedelta(hours=2),
+            "assignedAt": datetime.now(timezone.utc) - timedelta(hours=2),
         },
         {
             "chat_id": "chat_003",
@@ -160,7 +160,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
                 }
             ],  # Timeline muestra el paso ANTERIOR que llevó al step actual (2)
             "asesor_id": asesor_ids[2] if len(asesor_ids) > 2 else None,
-            "assignedAt": datetime.utcnow() - timedelta(hours=1),
+            "assignedAt": datetime.now(timezone.utc) - timedelta(hours=1),
         },
         {
             "chat_id": "chat_004",
@@ -196,7 +196,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
                 },
             ],  # Timeline muestra los pasos ANTERIORES que llevaron al step actual (5)
             "asesor_id": asesor_ids[1] if len(asesor_ids) > 1 else None,
-            "assignedAt": datetime.utcnow() - timedelta(days=1),
+            "assignedAt": datetime.now(timezone.utc) - timedelta(days=1),
         },
         {
             "chat_id": "chat_005",
