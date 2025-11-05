@@ -21,12 +21,6 @@ class TokenResponse(BaseModel):
     asesor_id: str
 
 
-class SimpleTokenResponse(BaseModel):
-    """Modelo simplificado para respuesta de token - solo contiene el token"""
-
-    access_token: str
-
-
 class AsesorInfo(BaseModel):
     """Modelo para información del asesor autenticado"""
 

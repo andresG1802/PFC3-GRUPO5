@@ -174,19 +174,19 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
                     "timestamp": base_time - timedelta(hours=2),
                     "route": "route_4",
                     "step": 1,
-                    "userInput": "Consulta inicial",
+                    "userInput": "1",
                 },
                 {
                     "timestamp": base_time - timedelta(hours=1, minutes=30),
                     "route": "route_4",
                     "step": 2,
-                    "userInput": "Proporcionar detalles",
+                    "userInput": "2",
                 },
                 {
                     "timestamp": base_time - timedelta(hours=1),
                     "route": "route_4",
                     "step": 3,
-                    "userInput": "Solicitar solución",
+                    "userInput": "1",
                 },
                 {
                     "timestamp": base_time - timedelta(minutes=30),

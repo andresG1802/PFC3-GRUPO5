@@ -332,7 +332,9 @@ class ChatModel:
         normalized = {
             "id": message.get("id"),
             "body": message.get("body"),
-            "timestamp": message.get("timestamp", int(datetime.now(timezone.utc).timestamp())),
+            "timestamp": message.get(
+                "timestamp", int(datetime.now(timezone.utc).timestamp())
+            ),
             "type": message.get("type", "text"),
             "from_me": bool(message.get("from_me", False)),
             "ack": message.get("ack"),
@@ -369,7 +371,9 @@ class ChatModel:
 
         total = len(messages)
         # Ordenar por timestamp descendente (más recientes primero)
-        messages_sorted = sorted(messages, key=lambda m: m.get("timestamp", 0), reverse=True)
+        messages_sorted = sorted(
+            messages, key=lambda m: m.get("timestamp", 0), reverse=True
+        )
         paginated = messages_sorted[offset : offset + limit]
 
         return {"messages": paginated, "total": total}

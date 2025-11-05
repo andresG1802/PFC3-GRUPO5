@@ -226,7 +226,9 @@ async def get_chats(
 
             normalized_chats = filtered_chats
         except Exception as e:
-            logger.warning(f"No se pudo integrar interacciones pendientes en chats: {e}")
+            logger.warning(
+                f"No se pudo integrar interacciones pendientes en chats: {e}"
+            )
 
         # Aplicar paginación al resultado combinado
         total_count = len(normalized_chats)
@@ -849,13 +851,7 @@ async def get_chat_messages_db(
     },
 )
 async def send_message(
-    chat_id: str = Path(
-        ...,
-        description="ID único del chat",
-        min_length=1,
-        max_length=100,
-        pattern=r"^[a-zA-Z0-9@._-]+$",
-    ),
+    chat_id: str = Path(..., description="ID único del chat"),
     message_request: SendMessageRequest = ...,
     waha_client: WAHAClient = Depends(get_waha_dependency),
     current_user: dict = Depends(get_current_user),
@@ -911,7 +907,9 @@ async def send_message(
         # Persistir mensaje en MongoDB (saliente)
         try:
             interaction = InteractionModel.find_by_chat_id(chat_id)
-            advisor_id = str(current_user.get("_id")) if current_user.get("_id") else None
+            advisor_id = (
+                str(current_user.get("_id")) if current_user.get("_id") else None
+            )
             ChatModel.add_message(
                 chat_id,
                 {

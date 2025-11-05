@@ -191,7 +191,8 @@ class SendMessageRequest(BaseModel):
         None, description="Metadatos adicionales del mensaje"
     )
 
-    model_config = ConfigDict(json_schema_extra={
+    model_config = ConfigDict(
+        json_schema_extra={
             "examples": [
                 {"message": "Hola, ¿cómo estás?", "type": "text"},
                 {
@@ -207,7 +208,8 @@ class SendMessageRequest(BaseModel):
                     "longitude": -58.3816,
                 },
             ]
-        })
+        }
+    )
 
     @field_validator("latitude", "longitude")
     @classmethod

@@ -38,9 +38,7 @@ class InteractionBase(BaseModel):
         default_factory=list,
         description="Historial de interacciones",
         json_schema_extra={
-            "example": [
-                {"route": "route_1", "step": 1, "userInput": "1"}
-            ]
+            "example": [{"route": "route_1", "step": 1, "userInput": "1"}]
         },
     )
 

@@ -36,5 +36,5 @@ class PresenceUpdateRequest(BaseModel):
     """Solicitud para actualizar presencia propia"""
 
     presence: PresenceStatus = Field(..., description="Nuevo estado de presencia")
-    
+
     model_config = ConfigDict(json_schema_extra={"example": {"presence": "online"}})

@@ -132,11 +132,13 @@ class WebhookConfig(BaseModel):
     enabled: bool = Field(True, description="Webhook habilitado")
     secret: Optional[str] = Field(None, description="Secreto para validación")
 
-    model_config = ConfigDict(json_schema_extra={
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "url": "https://mi-backend.com/api/v1/webhooks/waha",
                 "events": ["message", "message.ack", "session.status"],
                 "enabled": True,
                 "secret": "mi-secreto-webhook",
             }
-        })
+        }
+    )

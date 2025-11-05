@@ -164,9 +164,7 @@ def _build_interaction_summary(timeline: list, current_route: str | None) -> str
         if s1:
             parts.append(f"El usuario indicó que desea realizar una {s1}.")
         if s2:
-            parts.append(
-                f"Responsable de los menores: {s2}."
-            )
+            parts.append(f"Responsable de los menores: {s2}.")
         if s3:
             parts.append(f"Sentencia existente: {s3}.")
         if s4:

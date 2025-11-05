@@ -14,7 +14,6 @@ import hashlib
 from ..models.auth import (
     LoginRequest,
     TokenResponse,
-    SimpleTokenResponse,
     ChangePasswordRequest,
     RegisterAsesorRequest,
     RegisterAsesorResponse,
@@ -107,7 +106,7 @@ async def login(login_data: LoginRequest):
         login_data: Credenciales de login
 
     Returns:
-        SimpleTokenResponse: Token de acceso
+        TokenResponse: Token de acceso y información del asesor
 
     Raises:
         HTTPException: Si las credenciales son inválidas
