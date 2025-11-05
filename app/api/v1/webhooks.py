@@ -6,6 +6,7 @@ from datetime import datetime
 import json
 
 from ...utils.logging_config import get_logger
+from ...database.models import ChatModel, InteractionModel
 from ...services.cache import get_cache
 from ..models.webhooks import (
     WebhookEvent,
@@ -37,6 +38,25 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                 cache.delete_pattern(f"messages:{chat_id}:*")
                 cache.delete_pattern(f"chat:{chat_id}")
                 logger.info(f"Cache invalidado para chat: {chat_id}")
+
+                # Persistir mensaje entrante en MongoDB
+                try:
+                    interaction = InteractionModel.find_by_chat_id(chat_id)
+                    ChatModel.add_message(
+                        chat_id,
+                        {
+                            "id": event_data.get("id"),
+                            "body": event_data.get("body"),
+                            "timestamp": event_data.get("timestamp", 0),
+                            "type": event_data.get("type", "text"),
+                            "from_me": bool(event_data.get("fromMe", False)),
+                            "ack": event_data.get("ack"),
+                            "from": event_data.get("from"),
+                        },
+                        interaction_id=interaction.get("_id") if interaction else None,
+                    )
+                except Exception as e:
+                    logger.warning(f"No se pudo persistir el mensaje entrante: {e}")
 
         elif event_type == "message.ack":
             # Actualizar estado de mensaje

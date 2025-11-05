@@ -31,7 +31,7 @@ from ..models.chats import (
 )
 from ...utils.logging_config import get_logger
 from .auth import get_current_user, get_current_admin
-from ...database.models import InteractionModel
+from ...database.models import InteractionModel, ChatModel
 
 # Logger específico para este módulo
 logger = get_logger(__name__)
@@ -724,6 +724,63 @@ async def get_chat_messages(
         )
 
 
+@router.get(
+    "/{chat_id}/messages/db",
+    response_model=MessagesListResponse,
+    summary="Obtener mensajes persistidos de un chat",
+    description="Obtiene los mensajes almacenados en MongoDB para un chat específico.",
+    responses={
+        200: {"description": "Mensajes obtenidos exitosamente"},
+        404: {"description": "Chat no encontrado"},
+        500: {"description": "Error interno del servidor"},
+    },
+)
+async def get_chat_messages_db(
+    chat_id: str = Path(
+        ...,
+        description="ID único del chat",
+        min_length=1,
+        max_length=100,
+        pattern=r"^[a-zA-Z0-9@._-]+$",
+    ),
+    limit: int = Query(20, ge=1, le=100, description="Número máximo de mensajes"),
+    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
+    current_user: dict = Depends(get_current_user),
+) -> MessagesListResponse:
+    """
+    Obtiene mensajes persistidos de un chat específico desde MongoDB
+    """
+    try:
+        data = ChatModel.get_messages(chat_id, limit, offset)
+        messages = []
+        for msg in data.get("messages", []):
+            messages.append(
+                Message(
+                    id=msg.get("id", ""),
+                    body=msg.get("body"),
+                    timestamp=msg.get("timestamp", 0),
+                    from_me=bool(msg.get("from_me", False)),
+                    type=msg.get("type", "text"),
+                    from_contact=msg.get("from"),
+                    ack=msg.get("ack"),
+                )
+            )
+
+        return MessagesListResponse(
+            messages=messages,
+            total=data.get("total", 0),
+            limit=limit,
+            offset=offset,
+        )
+
+    except Exception as e:
+        logger.error(f"Error obteniendo mensajes persistidos: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor",
+        )
+
+
 @router.post(
     "/{chat_id}/messages",
     response_model=SendMessageResponse,
@@ -850,6 +907,27 @@ async def send_message(
             message_request.type.value,
             **{k: v for k, v in message_data.items() if k not in ["text", "type"]},
         )
+
+        # Persistir mensaje en MongoDB (saliente)
+        try:
+            interaction = InteractionModel.find_by_chat_id(chat_id)
+            advisor_id = str(current_user.get("_id")) if current_user.get("_id") else None
+            ChatModel.add_message(
+                chat_id,
+                {
+                    "id": result.get("id"),
+                    "body": message_request.message,
+                    "timestamp": result.get("timestamp", 0),
+                    "type": message_request.type.value,
+                    "from_me": True,
+                    "ack": result.get("ack"),
+                    "metadata": message_request.metadata,
+                    "advisor_id": advisor_id,
+                },
+                interaction_id=interaction.get("_id") if interaction else None,
+            )
+        except Exception as persist_err:
+            logger.warning(f"No se pudo persistir el mensaje en Mongo: {persist_err}")
 
         response = SendMessageResponse(
             id=result.get("id", ""),

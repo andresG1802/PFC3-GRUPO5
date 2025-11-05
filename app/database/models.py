@@ -6,7 +6,11 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 from bson import ObjectId
 from pydantic import BaseModel
-from .connection import get_interactions_collection, get_asesores_collection
+from .connection import (
+    get_interactions_collection,
+    get_asesores_collection,
+    get_chats_collection,
+)
 
 
 class TimelineEntry(BaseModel):
@@ -74,6 +78,24 @@ class InteractionModel:
         collection = get_interactions_collection()
 
         result = collection.find_one({"phone": phone})
+        if result:
+            result["_id"] = str(result["_id"])
+        return result
+
+    @staticmethod
+    def find_by_chat_id(chat_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Busca una interaction por chat_id
+
+        Args:
+            chat_id: ID del chat
+
+        Returns:
+            Dict o None: Datos de la interaction
+        """
+        collection = get_interactions_collection()
+
+        result = collection.find_one({"chat_id": chat_id})
         if result:
             result["_id"] = str(result["_id"])
         return result
@@ -258,6 +280,99 @@ class InteractionModel:
 
         result = collection.delete_one({"phone": phone})
         return result.deleted_count > 0
+
+
+class ChatModel:
+    """Modelo para gestionar chats y sus mensajes en MongoDB"""
+
+    @staticmethod
+    def upsert_chat(chat_id: str, interaction_id: Optional[str] = None) -> bool:
+        """
+        Crea o actualiza el documento base del chat.
+
+        Args:
+            chat_id: ID único del chat (WA ID)
+            interaction_id: ID de la interaction asociada
+
+        Returns:
+            bool: True si se modificó o creó el documento
+        """
+        collection = get_chats_collection()
+        update = {"$set": {"chat_id": chat_id}}
+        if interaction_id:
+            update["$set"]["interaction_id"] = interaction_id
+        update["$setOnInsert"] = {"createdAt": datetime.utcnow()}
+
+        result = collection.update_one({"_id": chat_id}, update, upsert=True)
+        return (result.upserted_id is not None) or (result.modified_count > 0)
+
+    @staticmethod
+    def add_message(
+        chat_id: str,
+        message: Dict[str, Any],
+        interaction_id: Optional[str] = None,
+    ) -> bool:
+        """
+        Agrega un mensaje al historial del chat (persistencia).
+
+        Args:
+            chat_id: ID del chat
+            message: Datos del mensaje normalizados
+            interaction_id: ID de la interaction asociada (opcional)
+
+        Returns:
+            bool: True si se insertó el mensaje
+        """
+        collection = get_chats_collection()
+
+        # Asegurar documento de chat
+        ChatModel.upsert_chat(chat_id, interaction_id)
+
+        # Estructura básica del mensaje
+        normalized = {
+            "id": message.get("id"),
+            "body": message.get("body"),
+            "timestamp": message.get("timestamp", int(datetime.utcnow().timestamp())),
+            "type": message.get("type", "text"),
+            "from_me": bool(message.get("from_me", False)),
+            "ack": message.get("ack"),
+            "metadata": message.get("metadata"),
+        }
+
+        # Datos adicionales comunes
+        if "advisor_id" in message:
+            normalized["advisor_id"] = message["advisor_id"]
+        if "from" in message:
+            normalized["from"] = message["from"]
+
+        result = collection.update_one(
+            {"_id": chat_id}, {"$push": {"messages": normalized}}
+        )
+        return result.modified_count > 0
+
+    @staticmethod
+    def get_messages(chat_id: str, limit: int = 20, offset: int = 0) -> Dict[str, Any]:
+        """
+        Obtiene mensajes persistidos de un chat con paginación simple.
+
+        Args:
+            chat_id: ID del chat
+            limit: Máximo de mensajes
+            offset: Desplazamiento de inicio
+
+        Returns:
+            Dict con mensajes y total
+        """
+        collection = get_chats_collection()
+        doc = collection.find_one({"_id": chat_id}, {"messages": 1})
+        messages = doc.get("messages", []) if doc else []
+
+        total = len(messages)
+        # Ordenar por timestamp descendente (más recientes primero)
+        messages_sorted = sorted(messages, key=lambda m: m.get("timestamp", 0), reverse=True)
+        paginated = messages_sorted[offset : offset + limit]
+
+        return {"messages": paginated, "total": total}
 
 
 class AsesorModel:

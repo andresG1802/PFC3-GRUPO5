@@ -111,3 +111,14 @@ def get_asesores_collection():
     """
     db = get_database()
     return db.asesores
+
+
+def get_chats_collection():
+    """
+    Obtiene la colección de chats
+
+    Returns:
+        Collection: Colección de chats
+    """
+    db = get_database()
+    return db.chats

@@ -98,7 +98,7 @@ def get_current_admin(current_user: dict = Depends(get_current_user)):
     return current_user
 
 
-@router.post("/login", response_model=SimpleTokenResponse)
+@router.post("/login", response_model=TokenResponse)
 async def login(login_data: LoginRequest):
     """
     Autentica un asesor y retorna un token de acceso
@@ -132,7 +132,12 @@ async def login(login_data: LoginRequest):
         expires_delta=access_token_expires,
     )
 
-    return SimpleTokenResponse(access_token=access_token)
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=JWT_EXPIRE_MINUTES * 60,
+        asesor_id=str(asesor.get("_id")),
+    )
 
 
 @router.post("/register", response_model=RegisterAsesorResponse)
