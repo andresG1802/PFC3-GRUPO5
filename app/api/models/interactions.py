@@ -88,22 +88,6 @@ class InteractionResponse(InteractionBase):
         return v.isoformat() if v is not None else None
 
 
-class InteractionListResponse(BaseModel):
-    """Modelo de respuesta para lista de interactions con metadatos de paginación"""
-
-    interactions: List[InteractionResponse]
-    total: int = Field(
-        ..., description="Número total de registros que coinciden con el filtro"
-    )
-    count: int = Field(..., description="Número de registros en la página actual")
-    skip: int = Field(..., description="Número de registros omitidos")
-    limit: int = Field(..., description="Límite de registros por página")
-    has_next: bool = Field(..., description="Indica si hay más páginas disponibles")
-    has_previous: bool = Field(..., description="Indica si hay páginas anteriores")
-    page: int = Field(..., description="Número de página actual (basado en skip/limit)")
-    total_pages: int = Field(..., description="Número total de páginas")
-
-
 class AssignAsesorResponse(BaseModel):
     """Modelo de respuesta para asignación de asesor"""
 

@@ -121,6 +121,10 @@ class ChatResponse(BaseModel):
     message: str = Field(
         "Chat obtenido exitosamente", description="Mensaje de respuesta"
     )
+    summary: Optional[str] = Field(
+        None,
+        description="Mensaje resumen construido desde el timeline (route, step, userInput)",
+    )
 
 
 class Message(BaseModel):
@@ -144,6 +148,14 @@ class MessagesListResponse(BaseModel):
     total: int = Field(..., description="Total de mensajes disponibles")
     limit: int = Field(..., description="Límite aplicado")
     offset: int = Field(..., description="Desplazamiento aplicado")
+    summary: Optional[str] = Field(
+        None,
+        description="Human-readable summary built from interaction timeline and route",
+    )
+    chat_id: Optional[str] = Field(
+        None,
+        description="Chat identifier used to fetch messages",
+    )
 
 
 class SendMessageRequest(BaseModel):

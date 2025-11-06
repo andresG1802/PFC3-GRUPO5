@@ -378,6 +378,71 @@ class ChatModel:
 
         return {"messages": paginated, "total": total}
 
+    @staticmethod
+    def get_chat(db_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Obtiene un chat persistido desde MongoDB y construye datos mínimos.
+
+        Devuelve un dict con campos compatibles con el modelo `Chat` del API:
+        - id
+        - name (si se puede inferir del teléfono de la interaction)
+        - type (individual)
+        - timestamp (último mensaje si existe)
+        - unread_count (0 por defecto)
+        - archived, pinned, muted (False)
+        - last_message (si hay mensajes)
+
+        Args:
+            chat_id: ID del chat
+
+        Returns:
+            Dict o None: Datos del chat normalizados o None si no existe
+        """
+        collection = get_chats_collection()
+        doc = collection.find_one({"_id": db_id})
+        if not doc:
+            return None
+
+        # Intentar enriquecer con la interaction asociada (para nombre)
+        interaction = InteractionModel.find_by_chat_id(db_id)
+        name = None
+        if interaction:
+            name = interaction.get("phone")
+
+        # Calcular último mensaje
+        messages = doc.get("messages", [])
+        last_msg = None
+        timestamp = None
+        if messages:
+            messages_sorted = sorted(
+                messages, key=lambda m: m.get("timestamp", 0), reverse=True
+            )
+            last_msg = messages_sorted[0]
+            timestamp = last_msg.get("timestamp")
+
+        chat_data: Dict[str, Any] = {
+            "id": db_id,
+            "name": name,
+            "type": "individual",
+            "timestamp": timestamp,
+            "unread_count": 0,
+            "archived": False,
+            "pinned": False,
+            "muted": False,
+        }
+
+        if last_msg:
+            chat_data["last_message"] = {
+                "id": last_msg.get("id") or "",
+                "timestamp": last_msg.get("timestamp", 0),
+                "from_me": bool(last_msg.get("from_me", False)),
+                "type": last_msg.get("type", "text"),
+                "body": last_msg.get("body"),
+                "ack": last_msg.get("ack"),
+            }
+
+        return chat_data
+
 
 class AsesorModel:
     """Modelo para manejar asesores en MongoDB"""

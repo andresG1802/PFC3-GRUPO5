@@ -128,18 +128,7 @@ class RateLimitConfig(BaseSettings):
                 "rpm": 200,
                 "rph": 3000,
             },  # Enviar mensajes (muy frecuente)
-            "GET /api/v1/chats/*/messages": {
-                "rpm": 300,
-                "rph": 4000,
-            },  # Leer mensajes (muy frecuente)
-            # Endpoints de interacciones - Para gestión de casos
-            "POST /api/v1/interactions": {"rpm": 60, "rph": 800},
-            "PUT /api/v1/interactions": {"rpm": 80, "rph": 1000},
-            "DELETE /api/v1/interactions": {"rpm": 20, "rph": 200},
-            "POST /api/v1/interactions/*/assign": {"rpm": 40, "rph": 400},
             # Endpoints de consulta - Para dashboards y reportes
-            "GET /api/v1/interactions": {"rpm": 150, "rph": 2000},
-            "GET /api/v1/interactions/*": {"rpm": 200, "rph": 2500},
             "GET /api/v1/chats": {"rpm": 120, "rph": 1800},
             "GET /api/v1/chats/*": {"rpm": 180, "rph": 2200},
             # Endpoints de notificaciones y estado - Para tiempo real

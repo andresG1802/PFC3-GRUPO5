@@ -8,7 +8,7 @@ from ...services.waha_client import (
     get_waha_client,
     WAHAClient,
     WAHAConnectionError,
-    WAHANotFoundError
+    WAHANotFoundError,
 )
 from ...services.cache import get_cache
 from ..models.presence import (

@@ -4,24 +4,23 @@ from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
 from typing import Dict, Any
 from datetime import datetime, timezone
 
+from app.api import envs
+
 from ...services.waha_client import (
     get_waha_client,
     WAHAClient,
     WAHAConnectionError,
-    WAHAAuthenticationError,
     WAHANotFoundError,
     WAHATimeoutError,
 )
 from ...services.cache import (
     get_cache,
-    cache_key_for_chats,
     cache_key_for_chat,
     cache_key_for_overview,
 )
 from ..models.chats import (
     Chat,
     ChatOverview,
-    ChatListResponse,
     ChatResponse,
     ErrorResponse,
     MessagesListResponse,
@@ -58,8 +57,7 @@ async def get_waha_dependency() -> WAHAClient:
     summary="Limpiar cache de chats",
     description="""
     Limpia completamente el cache interno de chats para forzar la actualización de datos.
-    
-    **Uso:** Desarrollo, testing, troubleshooting de datos obsoletos y liberación de memoria.
+    Uso recomendado: Desarrollo, testing, troubleshooting de datos obsoletos y liberación de memoria.
     """,
     responses={
         200: {
@@ -83,6 +81,11 @@ async def clear_chat_cache(
     """
     Limpia el cache de chats
     """
+    if not envs.DEBUG:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cache clearing is only available in DEBUG mode",
+        )
     cache = get_cache()
     cleared_entries = cache.clear()
 
@@ -96,194 +99,13 @@ async def clear_chat_cache(
 
 
 @router.get(
-    "",
-    response_model=ChatListResponse,
-    summary="Obtener lista de chats",
-    description="Obtiene una lista paginada de chats de WhatsApp desde WAHA API con caché optimizado.",
-    responses={
-        200: {"description": "Lista de chats obtenida exitosamente"},
-        503: {"description": "Servicio WAHA no disponible"},
-        504: {"description": "Timeout en comunicación con WAHA"},
-        500: {"description": "Error interno del servidor"},
-    },
-)
-async def get_chats(
-    limit: int = Query(
-        20, ge=1, le=100, description="Número máximo de chats a obtener"
-    ),
-    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
-    waha_client: WAHAClient = Depends(get_waha_dependency),
-    current_user: dict = Depends(get_current_user),
-) -> ChatListResponse:
-    """
-    Obtiene todos los chats con paginación
-    """
-    try:
-        # Verificar cache
-        cache = get_cache()
-        cache_key = cache_key_for_chats(limit, offset)
-        cached_result = cache.get(cache_key)
-        if cached_result:
-            logger.info(
-                f"Devolviendo chats desde cache: limit={limit}, offset={offset}"
-            )
-            return ChatListResponse(**cached_result)
-
-        logger.info(f"Obteniendo chats - limit: {limit}, offset: {offset}")
-
-        # Obtener chats desde WAHA (paginados) y normalizar a ChatOverview
-        raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
-
-        normalized_chats = []
-        for raw_chat in raw_chats:
-            try:
-                normalized_data = waha_client._normalize_chat_data(raw_chat)
-                overview_data = {
-                    "id": normalized_data.get("id", ""),
-                    "name": normalized_data.get("name"),
-                    "type": normalized_data.get("type", "individual"),
-                    "timestamp": normalized_data.get("timestamp"),
-                    "unread_count": normalized_data.get("unread_count", 0),
-                    "last_message": normalized_data.get("last_message"),
-                    "picture_url": normalized_data.get("picture_url"),
-                    "archived": normalized_data.get("archived", False),
-                    "pinned": normalized_data.get("pinned", False),
-                }
-                chat_overview = ChatOverview(**overview_data)
-                normalized_chats.append(chat_overview)
-            except Exception as e:
-                logger.warning(
-                    f"Error normalizando chat {raw_chat.get('id', 'unknown')}: {e}"
-                )
-                continue
-
-        # Integrate interactions with 'pending' state
-        try:
-            pending_total = InteractionModel.count_all(state="pending")
-            pending_interactions = (
-                InteractionModel.find_all(skip=0, limit=pending_total, state="pending")
-                if pending_total > 0
-                else []
-            )
-
-            # Build the set of ids for pending interactions using chat_id or phone
-            pending_ids = set()
-            for it in pending_interactions:
-                cid = it.get("chat_id") or it.get("phone")
-                if cid:
-                    pending_ids.add(cid)
-
-            # Filter WAHA chats to include only those with pending interactions
-            chats_by_id = {c.id: c for c in normalized_chats}
-            filtered_chats = [c for c in normalized_chats if c.id in pending_ids]
-
-            # Add minimal chats based on pending interactions that are not present in WAHA
-            for it in pending_interactions:
-                # Prefer chat_id; fallback to phone when chat_id is missing
-                chat_id = it.get("chat_id") or it.get("phone")
-                if not chat_id or chat_id in chats_by_id:
-                    continue
-
-                # Build a minimal ChatOverview from interaction data
-                created_at = it.get("createdAt")
-                timestamp = None
-                try:
-                    if created_at:
-                        # Convert datetime to unix timestamp (seconds)
-                        timestamp = int(created_at.timestamp())
-                except Exception:
-                    timestamp = None
-
-                minimal_chat_data = {
-                    "id": chat_id,
-                    "name": it.get("phone"),
-                    "type": "individual",
-                    "timestamp": timestamp,
-                    "unread_count": 0,
-                    "archived": False,
-                    "pinned": False,
-                    "muted": False,
-                    "contact": None,
-                    "last_message": None,
-                    "participants": None,
-                    "group_metadata": None,
-                    "picture_url": None,
-                }
-
-                try:
-                    fallback_chat = ChatOverview(**minimal_chat_data)
-                    filtered_chats.append(fallback_chat)
-                except Exception as e:
-                    logger.warning(
-                        f"Error creating chat from pending interaction {chat_id}: {e}"
-                    )
-
-            # Ordenar por timestamp descendente cuando esté disponible
-            def sort_key(c: ChatOverview):
-                return c.timestamp or 0
-
-            filtered_chats.sort(key=sort_key, reverse=True)
-
-            normalized_chats = filtered_chats
-        except Exception as e:
-            logger.warning(
-                f"No se pudo integrar interacciones pendientes en chats: {e}"
-            )
-
-        # Aplicar paginación al resultado combinado
-        total_count = len(normalized_chats)
-        paged_chats = normalized_chats[offset : offset + limit]
-
-        # Crear respuesta (serialize chats for cache)
-        response_data = {
-            "chats": [chat.dict() for chat in paged_chats],
-            "total": total_count,
-            "limit": limit,
-            "offset": offset,
-            "has_more": (offset + limit) < total_count,
-            "timestamp": datetime.now().isoformat(),
-        }
-
-        # Guardar en cache
-        cache.set(cache_key, response_data, ttl=300)  # 5 minutos
-
-        logger.info(f"Devueltos {len(normalized_chats)} chats exitosamente")
-        return ChatListResponse(**response_data)
-
-    except WAHAAuthenticationError as e:
-        logger.error(f"Error de autenticación WAHA: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No autorizado: API Key de WAHA inválida",
-        )
-    except WAHATimeoutError as e:
-        logger.error(f"Timeout WAHA: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Timeout en la comunicación con WAHA",
-        )
-    except WAHAConnectionError as e:
-        logger.error(f"Error de conexión WAHA: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Servicio WAHA no disponible",
-        )
-    except Exception as e:
-        logger.error(f"Error inesperado obteniendo chats: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor",
-        )
-
-
-@router.get(
     "/overview",
-    summary="Obtener vista general de chats",
-    description="""
-    Obtiene una vista general optimizada de chats con información básica.
-    
-    **Características:** Respuesta más rápida que el endpoint completo, solo información esencial de cada chat, ideal para listados y navegación con cache optimizado de 5 minutos.
-    """,
+    summary="Get chats overview",
+    description=(
+        "Gets an optimized chats overview from WAHA. If pending interactions exist in the database, "
+        "the request applies an 'ids' filter built from interaction phone numbers as stored ('<phone>@<domain>') "
+        "so WAHA only returns overview for those contacts. Each chat includes the related MongoDB interaction '_id' when available."
+    ),
     responses={
         200: {
             "description": "Vista general obtenida exitosamente",
@@ -301,6 +123,7 @@ async def get_chats(
                                     "last_message_time": "2024-01-15T10:30:00Z",
                                     "is_group": False,
                                     "is_archived": False,
+                                    "interaction_id": "665f1a2b3c4d5e6f7a8b9c0d",
                                 }
                             ],
                         },
@@ -327,9 +150,40 @@ async def get_chats_overview(
     Obtiene vista general de chats optimizada
     """
     try:
-        # Verificar cache
+        # Construir filtro de IDs desde interacciones (usar 'phone') y mapear _id
+        ids_filter_set = set()
+        interaction_id_map: dict[str, str] = {}
+        try:
+            total_interactions = InteractionModel.count_all(state="pending")
+            interactions = (
+                InteractionModel.find_all(
+                    skip=0, limit=total_interactions, state="pending"
+                )
+                if total_interactions and total_interactions > 0
+                else []
+            )
+            for it in interactions:
+                phone = (it.get("phone") or "").strip()
+                chat_id = (it.get("chat_id") or "").strip()
+                mongo_id = it.get("_id")
+                if phone:
+                    ids_filter_set.add(phone)
+                    if mongo_id:
+                        interaction_id_map[phone] = str(mongo_id)
+                elif chat_id and "@" in chat_id:
+                    ids_filter_set.add(chat_id)
+                    if mongo_id:
+                        interaction_id_map[chat_id] = str(mongo_id)
+        except Exception:
+            ids_filter_set = set()
+
+        ids_filter = list(ids_filter_set)
+
+        # Verificar cache con clave sensible al filtro de ids
         cache = get_cache()
-        cache_key = cache_key_for_overview(limit, offset)
+        cache_key = cache_key_for_overview(
+            limit, offset, ids_filter if ids_filter else None
+        )
         cached_result = cache.get(cache_key)
         if cached_result:
             logger.info(
@@ -350,14 +204,29 @@ async def get_chats_overview(
 
         logger.info(f"Obteniendo chats overview - limit: {limit}, offset: {offset}")
 
-        # Intentar obtener overview optimizado, fallback a chats normales
+        # Intentar obtener overview optimizado con filtro por ids; fallback a overview sin filtro o a chats normales
         try:
-            raw_chats = await waha_client.get_chats_overview(limit=limit, offset=offset)
-        except:
+            if ids_filter:
+                raw_chats = await waha_client.get_chats_overview(
+                    limit=limit, offset=offset, ids=ids_filter
+                )
+            else:
+                raw_chats = await waha_client.get_chats_overview(
+                    limit=limit, offset=offset
+                )
+        except Exception:
             logger.warning("Overview no disponible, usando chats normales")
             raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
 
-        # Crear objetos ChatOverview
+        # Si hubo fallback y tenemos filtro, aplicar filtrado local por id
+        if ids_filter:
+            allowed_ids = set(ids_filter)
+            try:
+                raw_chats = [c for c in raw_chats if c.get("id") in allowed_ids]
+            except Exception:
+                pass
+
+        # Crear objetos ChatOverview y enriquecer con interaction_id
         overview_chats = []
         for raw_chat in raw_chats:
             try:
@@ -374,7 +243,13 @@ async def get_chats_overview(
                     "archived": raw_chat.get("archived", False),
                     "pinned": raw_chat.get("pinned", False),
                 }
-                overview_chats.append(ChatOverview(**overview_data))
+                chat_obj = ChatOverview(**overview_data)
+                chat_dict = chat_obj.dict()
+                # Añadir _id de interacción si existe
+                interaction_id = interaction_id_map.get(chat_dict.get("id"))
+                if interaction_id:
+                    chat_dict["interaction_id"] = interaction_id
+                overview_chats.append(chat_dict)
             except Exception as e:
                 logger.warning(
                     f"Error creando overview para chat {raw_chat.get('id', 'unknown')}: {e}"
@@ -382,7 +257,7 @@ async def get_chats_overview(
                 continue
 
         # Guardar en cache
-        cache.set(cache_key, [chat.dict() for chat in overview_chats], ttl=300)
+        cache.set(cache_key, overview_chats, ttl=300)
 
         # Crear respuesta estructurada
         response_data = {
@@ -393,7 +268,7 @@ async def get_chats_overview(
                     "limit": limit,
                     "offset": offset,
                 },
-                "chats": [chat.dict() for chat in overview_chats],
+                "chats": overview_chats,
             },
             "message": "Overview de chats obtenido exitosamente",
         }
@@ -410,146 +285,127 @@ async def get_chats_overview(
 
 
 @router.get(
-    "/{chat_id}",
-    response_model=ChatResponse,
-    summary="Obtener chat específico",
+    "/{interaction_id}",
+    response_model=MessagesListResponse,
+    summary="Get persisted chat messages by interaction",
     description="""
-    Obtiene información detallada de un chat específico por su ID.
-    
-    **Incluye:** Información completa del chat, detalles del contacto o grupo, último mensaje si está disponible y cache optimizado de 10 minutos.
+    Returns persisted messages from MongoDB for the chat associated with the given interaction.
+
+    Chat ID resolution:
+    - Try `interaction_id` as key.
+    - Fallback: load the interaction and use `chat_id` or `phone` as chat identifier.
+
+    Pagination: `limit` and `offset`. No caching to avoid stale data.
     """,
     responses={
-        200: {
-            "description": "Chat obtenido exitosamente",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "success": True,
-                        "data": {
-                            "id": "5491234567890@c.us",
-                            "name": "Juan Pérez",
-                            "type": "individual",
-                            "contact": {
-                                "id": "5491234567890@c.us",
-                                "name": "Juan Pérez",
-                                "phone": "+5491234567890",
-                                "is_business": False,
-                            },
-                            "last_message": {
-                                "id": "msg123",
-                                "body": "Hola, ¿cómo estás?",
-                                "type": "text",
-                                "timestamp": "2024-01-15T10:30:00Z",
-                                "from_me": False,
-                                "ack": "read",
-                            },
-                            "unread_count": 2,
-                            "is_pinned": False,
-                            "is_archived": False,
-                            "is_muted": False,
-                        },
-                        "message": "Chat obtenido exitosamente",
-                    }
-                }
-            },
-        },
-        404: {
-            "description": "Chat no encontrado",
-            "content": {
-                "application/json": {
-                    "example": {
-                        "error": "not_found",
-                        "message": "Chat no encontrado",
-                        "detail": "El chat especificado no existe o no es accesible",
-                    }
-                }
-            },
-        },
-        503: {"description": "Servicio WAHA no disponible", "model": ErrorResponse},
-        504: {
-            "description": "Timeout en comunicación con WAHA",
-            "model": ErrorResponse,
-        },
+        200: {"description": "Messages retrieved successfully"},
+        404: {"description": "Chat not found"},
+        500: {"description": "Internal server error"},
     },
-    tags=["Chats", "Individual"],
+    tags=["Chats", "Messages"],
 )
 async def get_chat_by_id(
-    chat_id: str = Path(
+    interaction_id: str = Path(
         ...,
-        description="ID único del chat",
-        min_length=1,
-        max_length=100,
-        pattern=r"^[a-zA-Z0-9@._-]+$",
+        description="Unique interaction ID (MongoDB ObjectId)",
+        min_length=24,
+        max_length=24,
+        pattern=r"^[a-fA-F0-9]{24}$",
     ),
-    waha_client: WAHAClient = Depends(get_waha_dependency),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of messages"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
     current_user: dict = Depends(get_current_user),
-) -> ChatResponse:
+) -> MessagesListResponse:
     """
-    Obtiene un chat específico por ID
+    Get persisted messages for the chat associated with an interaction.
     """
     try:
-        # Verificar cache
-        cache = get_cache()
-        cache_key = cache_key_for_chat(chat_id)
-        cached_result = cache.get(cache_key)
-        if cached_result:
-            logger.info(f"Devolviendo chat desde cache: {chat_id}")
-            return ChatResponse(**cached_result)
+        logger.info(
+            f"Obteniendo mensajes por interaction_id: {interaction_id} (limit={limit}, offset={offset})"
+        )
 
-        logger.info(f"Obteniendo chat específico: {chat_id}")
+        # Resolver posibles claves de chat
+        candidates = [interaction_id]
+        interaction = InteractionModel.find_by_id(interaction_id)
+        if interaction:
+            chat_id_ref = (interaction.get("chat_id") or "").strip()
+            phone_ref = (interaction.get("phone") or "").strip()
+            if chat_id_ref:
+                candidates.append(chat_id_ref)
+            if phone_ref:
+                candidates.append(phone_ref)
 
-        # Obtener chat desde WAHA
-        raw_chat = await waha_client.get_chat_by_id(chat_id)
+        # Intentar obtener mensajes usando la primera clave válida que exista en DB
+        for candidate in candidates:
+            chat_exists = ChatModel.get_chat(candidate)
+            if chat_exists:
+                data = ChatModel.get_messages(candidate, limit, offset)
+                messages = []
+                for msg in data.get("messages", []):
+                    messages.append(
+                        Message(
+                            id=msg.get("id", ""),
+                            body=msg.get("body"),
+                            timestamp=msg.get("timestamp", 0),
+                            from_me=bool(msg.get("from_me", False)),
+                            type=msg.get("type", "text"),
+                            from_contact=msg.get("from"),
+                            ack=msg.get("ack"),
+                        )
+                    )
 
-        if not raw_chat:
-            logger.warning(f"Chat no encontrado: {chat_id}")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Chat con ID '{chat_id}' no encontrado",
+                # Construir summary si hay interacción
+                summary_message = None
+                if interaction:
+                    summary_message = _build_interaction_summary(
+                        interaction.get("timeline", []), interaction.get("route")
+                    )
+
+                logger.info(
+                    f"Mensajes obtenidos (chat_id='{candidate}'): total={data.get('total', 0)}"
+                )
+                return MessagesListResponse(
+                    messages=messages,
+                    total=data.get("total", 0),
+                    limit=limit,
+                    offset=offset,
+                    summary=summary_message,
+                    chat_id=candidate,
+                )
+
+        # Si no existe chat pero la interacción está pending, devolver mensajes vacíos y summary
+        if interaction and interaction.get("state") == "pending":
+            inferred_chat_id = (interaction.get("phone") or "").strip()
+            summary_message = _build_interaction_summary(
+                interaction.get("timeline", []), interaction.get("route")
+            )
+            logger.info(
+                f"Interacción pending: devolviendo mensajes vacíos y summary (interaction_id='{interaction_id}')"
+            )
+            return MessagesListResponse(
+                messages=[],
+                total=0,
+                limit=limit,
+                offset=offset,
+                summary=summary_message,
+                chat_id=inferred_chat_id,
             )
 
-        # Normalizar datos
-        normalized_data = waha_client._normalize_chat_data(raw_chat)
-        chat = Chat(**normalized_data)
-
-        # Crear respuesta
-        response_data = {
-            "success": True,
-            "data": chat.dict(),
-            "message": "Chat obtenido exitosamente",
-        }
-
-        # Guardar en cache
-        cache.set(
-            cache_key, response_data, ttl=600
-        )  # 10 minutos para chats específicos
-
-        logger.info(f"Chat {chat_id} obtenido exitosamente")
-        return ChatResponse(**response_data)
+        # Ninguna clave de chat válida encontrada
+        logger.warning(
+            f"Chat no encontrado para interaction_id='{interaction_id}' (candidatos: {candidates})"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Chat no encontrado",
+        )
 
     except HTTPException:
-        # Re-lanzar HTTPExceptions tal como están
         raise
-    except WAHAAuthenticationError as e:
-        logger.error(f"Error de autenticación WAHA: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="No autorizado: API Key de WAHA inválida",
-        )
-    except WAHATimeoutError as e:
-        logger.error(f"Timeout WAHA: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Timeout en la comunicación con WAHA",
-        )
-    except WAHAConnectionError as e:
-        logger.error(f"Error de conexión WAHA: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Servicio WAHA no disponible",
-        )
     except Exception as e:
-        logger.error(f"Error inesperado obteniendo chat {chat_id}: {e}")
+        logger.error(
+            f"Error inesperado obteniendo mensajes para interaction_id {interaction_id}: {e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
@@ -642,145 +498,7 @@ async def get_chat_service_health(
         )
 
 
-@router.get(
-    "/{chat_id}/messages",
-    response_model=MessagesListResponse,
-    summary="Obtener mensajes de un chat",
-    description="""
-    Obtiene los mensajes de un chat específico con paginación.
-    
-    **Características:** Lista paginada de mensajes ordenados por timestamp (más recientes primero) con información completa de cada mensaje y soporte para diferentes tipos.
-    """,
-    responses={
-        200: {"description": "Mensajes obtenidos exitosamente"},
-        404: {"description": "Chat no encontrado"},
-        503: {"description": "Servicio WAHA no disponible"},
-        500: {"description": "Error interno del servidor"},
-    },
-)
-async def get_chat_messages(
-    chat_id: str = Path(..., description="ID único del chat"),
-    limit: int = Query(
-        20, ge=1, le=100, description="Número máximo de mensajes a obtener"
-    ),
-    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
-    waha_client: WAHAClient = Depends(get_waha_dependency),
-    current_user: dict = Depends(get_current_user),
-) -> MessagesListResponse:
-    """
-    Obtiene mensajes de un chat específico
-    """
-    try:
-        logger.info(f"Obteniendo mensajes para chat: {chat_id}")
-
-        # Obtener mensajes desde WAHA
-        messages_data = await waha_client.get_messages(chat_id, limit, offset)
-
-        # Normalizar mensajes
-        messages = []
-        for msg_data in messages_data.get("messages", []):
-            message = Message(
-                id=msg_data.get("id", ""),
-                body=msg_data.get("body"),
-                timestamp=msg_data.get("timestamp", 0),
-                from_me=msg_data.get("fromMe", False),
-                type=msg_data.get("type", "text"),
-                from_contact=msg_data.get("from"),
-                ack=msg_data.get("ack"),
-            )
-            messages.append(message)
-
-        response = MessagesListResponse(
-            messages=messages,
-            total=messages_data.get("total", 0),
-            limit=limit,
-            offset=offset,
-        )
-
-        logger.info(f"Mensajes obtenidos exitosamente: {len(messages)} mensajes")
-        return response
-
-    except WAHANotFoundError:
-        logger.warning(f"Chat no encontrado: {chat_id}")
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Chat no encontrado",
-        )
-    except WAHATimeoutError:
-        logger.error(f"Timeout obteniendo mensajes para chat: {chat_id}")
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Timeout en comunicación con WAHA",
-        )
-    except WAHAConnectionError:
-        logger.error(f"Error de conexión obteniendo mensajes para chat: {chat_id}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Servicio WAHA no disponible",
-        )
-    except Exception as e:
-        logger.error(f"Error inesperado obteniendo mensajes: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor",
-        )
-
-
-@router.get(
-    "/{chat_id}/messages/db",
-    response_model=MessagesListResponse,
-    summary="Obtener mensajes persistidos de un chat",
-    description="Obtiene los mensajes almacenados en MongoDB para un chat específico.",
-    responses={
-        200: {"description": "Mensajes obtenidos exitosamente"},
-        404: {"description": "Chat no encontrado"},
-        500: {"description": "Error interno del servidor"},
-    },
-)
-async def get_chat_messages_db(
-    chat_id: str = Path(
-        ...,
-        description="ID único del chat",
-        min_length=1,
-        max_length=100,
-        pattern=r"^[a-zA-Z0-9@._-]+$",
-    ),
-    limit: int = Query(20, ge=1, le=100, description="Número máximo de mensajes"),
-    offset: int = Query(0, ge=0, description="Desplazamiento para paginación"),
-    current_user: dict = Depends(get_current_user),
-) -> MessagesListResponse:
-    """
-    Obtiene mensajes persistidos de un chat específico desde MongoDB
-    """
-    try:
-        data = ChatModel.get_messages(chat_id, limit, offset)
-        messages = []
-        for msg in data.get("messages", []):
-            messages.append(
-                Message(
-                    id=msg.get("id", ""),
-                    body=msg.get("body"),
-                    timestamp=msg.get("timestamp", 0),
-                    from_me=bool(msg.get("from_me", False)),
-                    type=msg.get("type", "text"),
-                    from_contact=msg.get("from"),
-                    ack=msg.get("ack"),
-                )
-            )
-
-        return MessagesListResponse(
-            messages=messages,
-            total=data.get("total", 0),
-            limit=limit,
-            offset=offset,
-        )
-
-    except Exception as e:
-        logger.error(f"Error obteniendo mensajes persistidos: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error interno del servidor",
-        )
+# Endpoints GET de mensajes por chat_id han sido deprecados y retirados.
 
 
 @router.post(
@@ -969,3 +687,142 @@ async def send_message(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
         )
+
+
+def _build_interaction_summary(timeline: list, current_route: str | None) -> str:
+    """Generate a human-readable paragraph summary based on timeline and route.
+
+    Notes:
+    - Ignore entries with route == 'route_1'.
+    - Prefer the current interaction route if it is one of route_2/route_3/route_4.
+    - Otherwise, select the most recent (last) route in the timeline among route_2/route_3/route_4.
+    - Build a cohesive paragraph tailored to each route using available steps.
+    """
+
+    allowed_routes = {"route_2", "route_3", "route_4"}
+    type_by_route = {
+        "route_2": "abuso sexual",
+        "route_3": "denuncia penal",
+        "route_4": "deuda de alimentos",
+    }
+
+    # Choose target route
+    target_route = None
+    if current_route in allowed_routes:
+        target_route = current_route
+    else:
+        for entry in reversed(timeline or []):
+            r = (entry or {}).get("route")
+            if r in allowed_routes:
+                target_route = r
+                break
+
+    if not target_route:
+        return "No hay información suficiente para generar el resumen."
+
+    # Collect step -> userInput for the target route
+    steps: dict[int, str] = {}
+    for entry in timeline or []:
+        if (entry or {}).get("route") != target_route:
+            continue
+        step_num = (entry or {}).get("step")
+        user_input = (entry or {}).get("userInput")
+        if step_num is None:
+            continue
+        steps[int(step_num)] = (user_input or "").strip()
+
+    # Helper to translate numeric codes into human-readable text per route/step
+    def _translate_input(route: str, step: int, raw_value: str) -> str:
+        """Translate coded user inputs to human-readable labels based on route/step.
+
+        Rules (English):
+        - step 1 (all routes): 1 => "consulta", 2 => "denuncia".
+        - route_2 step 2: 1 => "victima", 2 => "testigo".
+        - route_3 step 2: 1 => "victima", 2 => "testigo".
+        - route_3 step 3: 1 => "robo", 2 => "agresión física", 3 => "amenaza".
+        - route_4 step 2: 1 => "sí", 2 => "no".
+        - route_4 step 3: 1 => "sí", 2 => "no".
+        - For any other case or free-text inputs, return the raw value.
+        """
+
+        v = (raw_value or "").strip()
+        if v == "":
+            return v
+
+        # Common step 1 mapping
+        if step == 1:
+            return {"1": "consulta", "2": "denuncia"}.get(v, v)
+
+        if route == "route_2" and step == 2:
+            return {"1": "victima", "2": "testigo"}.get(v, v)
+
+        if route == "route_3":
+            if step == 2:
+                return {"1": "victima", "2": "testigo"}.get(v, v)
+            if step == 3:
+                return {"1": "robo", "2": "agresión física", "3": "amenaza"}.get(v, v)
+
+        if route == "route_4":
+            if step == 2:
+                return {"1": "sí", "2": "no"}.get(v, v)
+            if step == 3:
+                return {"1": "sí", "2": "no"}.get(v, v)
+
+        return v
+
+    tipo = type_by_route.get(target_route, target_route)
+
+    # Compose paragraph by route
+    if target_route == "route_2":
+        # abuso sexual
+        s1 = _translate_input(target_route, 1, steps.get(1, ""))
+        s2 = _translate_input(target_route, 2, steps.get(2, ""))
+        s3 = steps.get(3)
+        parts: list[str] = []
+        parts.append(f"Tipo de denuncia: {tipo}.")
+        if s1:
+            parts.append(f"El usuario indicó que desea realizar una {s1}.")
+        if s2:
+            parts.append(f"La persona se identifica como {s2}.")
+        if s3:
+            parts.append(f"Información adicional: {s3}.")
+        return " ".join(parts)
+
+    if target_route == "route_3":
+        # denuncia penal
+        s1 = _translate_input(target_route, 1, steps.get(1, ""))
+        s2 = _translate_input(target_route, 2, steps.get(2, ""))
+        s3 = _translate_input(target_route, 3, steps.get(3, ""))
+        s4 = steps.get(4)
+        parts: list[str] = []
+        parts.append(f"Tipo de denuncia: {tipo}.")
+        if s1:
+            parts.append(f"El usuario indicó que desea realizar una {s1}.")
+        if s2:
+            parts.append(f"La persona es {s2}.")
+        if s3:
+            parts.append(f"Tipo de delito: {s3}.")
+        if s4:
+            parts.append(f"Información adicional: {s4}.")
+        return " ".join(parts)
+
+    if target_route == "route_4":
+        # deuda de alimentos
+        s1 = _translate_input(target_route, 1, steps.get(1, ""))
+        s2 = _translate_input(target_route, 2, steps.get(2, ""))
+        s3 = _translate_input(target_route, 3, steps.get(3, ""))
+        s4 = steps.get(4)
+        parts: list[str] = []
+        parts.append(f"Tipo de denuncia: {tipo}.")
+        if s1:
+            parts.append(f"El usuario indicó que desea realizar una {s1}.")
+        if s2:
+            parts.append(f"Responsable de los menores: {s2}.")
+        if s3:
+            parts.append(f"Sentencia existente: {s3}.")
+        if s4:
+            parts.append(f"Información adicional: {s4}.")
+        return " ".join(parts)
+
+    # Fallback (should not happen given allowed_routes)
+    return "No hay información suficiente para generar el resumen."

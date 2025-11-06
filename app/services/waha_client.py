@@ -8,8 +8,9 @@ import time
 
 import httpx
 
-from ..api.envs import WAHA_API_KEY, WAHA_ENCRYPTION_KEY
+from ..api.envs import WAHA_API_KEY
 from ..utils.logging_config import LoggerMixin
+from ..api.models.chats import ChatType, MessageType, MessageAck
 
 
 # Configurar logging
@@ -259,7 +260,7 @@ class WAHAClient(LoggerMixin):
 
     @retry_on_failure(max_retries=3, delay=1.0)
     async def get_chats_overview(
-        self, limit: int = 20, offset: int = 0
+        self, limit: int = 20, offset: int = 0, ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
         Obtiene vista general de chats optimizada desde WAHA
@@ -274,6 +275,9 @@ class WAHAClient(LoggerMixin):
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
             params = {"limit": limit, "offset": offset}
+            if ids:
+                # WAHA expects 'ids' as array of chatIds (e.g. 549xxxx@c.us)
+                params["ids"] = ids
 
             logger.debug(f"Obteniendo overview de chats: {url} - Params: {params}")
 
@@ -344,13 +348,39 @@ class WAHAClient(LoggerMixin):
             last_message = None
             if "lastMessage" in waha_chat and waha_chat["lastMessage"]:
                 msg = waha_chat["lastMessage"]
+
+                # Mapear ACK numérico de WAHA al enum MessageAck
+                def _map_message_ack(ack_value: Any) -> Optional[MessageAck]:
+                    try:
+                        if ack_value is None:
+                            return None
+                        if isinstance(ack_value, int):
+                            mapping = {
+                                -1: MessageAck.ERROR,
+                                0: MessageAck.PENDING,
+                                1: MessageAck.SERVER,
+                                2: MessageAck.DEVICE,
+                                3: MessageAck.READ,
+                                4: MessageAck.PLAYED,
+                            }
+                            return mapping.get(ack_value, MessageAck.PENDING)
+                        if isinstance(ack_value, str):
+                            # Aceptar valores string en cualquier casing
+                            try:
+                                return MessageAck(ack_value.upper())
+                            except Exception:
+                                return MessageAck.PENDING
+                        return MessageAck.PENDING
+                    except Exception:
+                        return MessageAck.PENDING
+
                 last_message = {
                     "id": msg.get("id", ""),
                     "timestamp": msg.get("timestamp", 0),
                     "from_me": msg.get("fromMe", False),
                     "type": msg.get("type", MessageType.TEXT),
                     "body": msg.get("body", ""),
-                    "ack": msg.get("ack", MessageAck.PENDING),
+                    "ack": _map_message_ack(msg.get("ack")),
                 }
 
             # Normalizar información de contacto

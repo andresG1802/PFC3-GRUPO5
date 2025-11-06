@@ -107,7 +107,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
     interactions_data = [
         {
             "chat_id": "chat_001",
-            "phone": "51948604478@c.us",
+            "phone": "11111111111@c.us",
             "state": "menus",
             "route": "route_1",
             "step": 1,
@@ -122,26 +122,28 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
         },
         {
             "chat_id": "chat_002",
-            "phone": "51948604479@c.us",
+            "phone": "51948604478@c.us",
             "state": "pending",
             "route": "route_2",
             "step": 3,
             "lang": "es",
             "timeline": [
                 {
-                    "timestamp": base_time - timedelta(minutes=10),
+                    "route": "route_1",
+                    "step": 1,
+                    "userInput": "1",
+                },
+                {
                     "route": "route_2",
                     "step": 1,
                     "userInput": "2",
                 },
                 {
-                    "timestamp": base_time - timedelta(minutes=5),
                     "route": "route_2",
                     "step": 2,
                     "userInput": "1",
                 },
                 {
-                    "timestamp": base_time - timedelta(minutes=2),
                     "route": "route_2",
                     "step": 3,
                     "userInput": "Mucha más informacion adicional",

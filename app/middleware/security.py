@@ -5,8 +5,6 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from typing import Callable
 
-from ..config.security import security_config
-
 logger = logging.getLogger(__name__)
 
 

@@ -5,7 +5,7 @@ Sistema de cache usando Redis para mejorar rendimiento
 import json
 import logging
 import os
-from typing import Any, Optional, Dict, Union
+from typing import Any, Optional, Dict, Union, List
 import hashlib
 import inspect
 from functools import wraps
@@ -349,30 +349,40 @@ def cache_key_for_chats(limit: int, offset: int, filters: Optional[Dict] = None)
     return f"chats:{limit}:{offset}"
 
 
-def cache_key_for_chat(chat_id: str) -> str:
+def cache_key_for_chat(db_id: str) -> str:
     """
     Genera clave de cache para chat específico
 
     Args:
-        chat_id: ID del chat
+        db_id: ID del chat en MongoDB
 
     Returns:
         Clave de cache como string
     """
-    return f"chat:{chat_id}"
+    return f"chat:{db_id}"
 
 
-def cache_key_for_overview(limit: int, offset: int) -> str:
+def cache_key_for_overview(
+    limit: int, offset: int, ids: Optional[List[str]] = None
+) -> str:
     """
     Genera clave de cache para overview de chats
 
     Args:
         limit: Límite de resultados
         offset: Desplazamiento
+        ids: Filtro opcional de chat IDs (array)
 
     Returns:
         Clave de cache como string
     """
+    if ids:
+        try:
+            ids_sorted = sorted(ids)
+            ids_hash = hashlib.md5(",".join(ids_sorted).encode()).hexdigest()[:8]
+            return f"overview:{limit}:{offset}:{ids_hash}"
+        except Exception:
+            return f"overview:{limit}:{offset}:ids"
     return f"overview:{limit}:{offset}"
 
 

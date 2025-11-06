@@ -1,7 +1,7 @@
 """Endpoints para manejo de webhooks de WAHA en tiempo real"""
 
 from fastapi import APIRouter, HTTPException, Request, status, BackgroundTasks
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from datetime import datetime
 import json
 
@@ -9,7 +9,6 @@ from ...utils.logging_config import get_logger
 from ...database.models import ChatModel, InteractionModel
 from ...services.cache import get_cache
 from ..models.webhooks import (
-    WebhookEvent,
     MessageEvent,
     MessageAckEvent,
     SessionStatusEvent,
