@@ -1,16 +1,14 @@
 """Endpoints para gestión de presencia de contactos de WhatsApp"""
 
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from typing import Dict, Any, List
+from datetime import datetime, timezone
 
 from ...services.waha_client import (
     get_waha_client,
     WAHAClient,
     WAHAConnectionError,
-    WAHAAuthenticationError,
-    WAHANotFoundError,
-    WAHATimeoutError,
+    WAHANotFoundError
 )
 from ...services.cache import get_cache
 from ..models.presence import (

@@ -3,7 +3,7 @@ Seeder para poblar la base de datos con datos de prueba
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 from .models import AsesorModel, InteractionModel
 from ..api.envs import DEBUG
@@ -122,7 +122,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
         },
         {
             "chat_id": "chat_002",
-            "phone": "51948604478@c.us",
+            "phone": "51948604479@c.us",
             "state": "pending",
             "route": "route_2",
             "step": 3,
@@ -132,87 +132,23 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
                     "timestamp": base_time - timedelta(minutes=10),
                     "route": "route_2",
                     "step": 1,
-                    "userInput": "Consulta sobre servicios",
+                    "userInput": "2",
                 },
                 {
                     "timestamp": base_time - timedelta(minutes=5),
                     "route": "route_2",
                     "step": 2,
-                    "userInput": "Más información",
+                    "userInput": "1",
                 },
-            ],  # Timeline muestra los pasos ANTERIORES que llevaron al step actual (3)
+                {
+                    "timestamp": base_time - timedelta(minutes=2),
+                    "route": "route_2",
+                    "step": 3,
+                    "userInput": "Mucha más informacion adicional",
+                },
+            ],
             "asesor_id": asesor_ids[1] if len(asesor_ids) > 1 else None,
             "assignedAt": datetime.now(timezone.utc) - timedelta(hours=2),
-        },
-        {
-            "chat_id": "chat_003",
-            "phone": "+59178345678",
-            "state": "derived",
-            "route": "route_3",
-            "step": 2,
-            "lang": "es",
-            "timeline": [
-                {
-                    "timestamp": base_time - timedelta(minutes=15),
-                    "route": "route_3",
-                    "step": 1,
-                    "userInput": "Problema técnico",
-                }
-            ],  # Timeline muestra el paso ANTERIOR que llevó al step actual (2)
-            "asesor_id": asesor_ids[2] if len(asesor_ids) > 2 else None,
-            "assignedAt": datetime.now(timezone.utc) - timedelta(hours=1),
-        },
-        {
-            "chat_id": "chat_004",
-            "phone": "+59178456789",
-            "state": "closed",
-            "route": "route_4",
-            "step": 5,
-            "lang": "es",
-            "timeline": [
-                {
-                    "timestamp": base_time - timedelta(hours=2),
-                    "route": "route_4",
-                    "step": 1,
-                    "userInput": "1",
-                },
-                {
-                    "timestamp": base_time - timedelta(hours=1, minutes=30),
-                    "route": "route_4",
-                    "step": 2,
-                    "userInput": "2",
-                },
-                {
-                    "timestamp": base_time - timedelta(hours=1),
-                    "route": "route_4",
-                    "step": 3,
-                    "userInput": "1",
-                },
-                {
-                    "timestamp": base_time - timedelta(minutes=30),
-                    "route": "route_4",
-                    "step": 4,
-                    "userInput": "Confirmar resolución",
-                },
-            ],  # Timeline muestra los pasos ANTERIORES que llevaron al step actual (5)
-            "asesor_id": asesor_ids[1] if len(asesor_ids) > 1 else None,
-            "assignedAt": datetime.now(timezone.utc) - timedelta(days=1),
-        },
-        {
-            "chat_id": "chat_005",
-            "phone": "+59178567890",
-            "state": "menus",
-            "route": "route_1",
-            "step": 2,
-            "lang": "qu",
-            "timeline": [
-                {
-                    "timestamp": base_time - timedelta(minutes=3),
-                    "route": "route_1",
-                    "step": 1,
-                    "userInput": "Inicio de conversación",
-                }
-            ],  # Timeline muestra el paso ANTERIOR que llevó al step actual (2)
         },
     ]
 
@@ -256,9 +192,9 @@ def seed_database():
         logger.info(f"Asesores procesados: {len(asesor_ids)}")
 
         # Crear interactions (solo en modo DEBUG)
-        # interaction_ids = create_test_interactions(asesor_ids)
-        # if interaction_ids:
-        #     logger.info(f"Interactions creadas: {len(interaction_ids)}")
+        interaction_ids = create_test_interactions(asesor_ids)
+        if interaction_ids:
+            logger.info(f"Interactions creadas: {len(interaction_ids)}")
 
         logger.info("Seeding completado exitosamente")
 

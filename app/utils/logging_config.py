@@ -6,7 +6,7 @@ import logging
 import logging.handlers
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import json
 

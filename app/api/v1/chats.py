@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from ...services.waha_client import (
     get_waha_client,

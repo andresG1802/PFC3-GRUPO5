@@ -3,7 +3,7 @@ Modelos de base de datos para MongoDB
 """
 
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from bson import ObjectId
 from pydantic import BaseModel
 from .connection import (
