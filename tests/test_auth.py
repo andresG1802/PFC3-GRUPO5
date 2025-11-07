@@ -268,7 +268,6 @@ class TestLogout:
         assert response.status_code == 403
 
 
-
 class TestGetAsesorInfo:
     """Tests para el endpoint de información del asesor"""
 

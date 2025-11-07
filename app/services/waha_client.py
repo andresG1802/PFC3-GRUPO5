@@ -94,7 +94,7 @@ class WAHAClient(LoggerMixin):
 
         # Configurar cliente HTTP con timeouts
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(30.0, connect=10.0),
+            timeout=httpx.Timeout(8.0, connect=4.0),
             headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
         )
 
@@ -698,6 +698,25 @@ class WAHAClient(LoggerMixin):
 # Instancia global del cliente (se inicializa cuando se necesite)
 _waha_client: Optional[WAHAClient] = None
 
+async def _quick_ping(base_url: str, session_name: str = "default") -> bool:
+    """
+    Fast-check if WAHA service is reachable using short timeouts.
+
+    Returns True if the server responds (any HTTP status), and False
+    if a timeout or connection error occurs. Prevents blocking the
+    global request when WAHA is unavailable.
+    """
+    try:
+        url = f"{base_url.rstrip('/')}/api/sessions/{session_name}"
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(5.0, connect=2.0),
+            headers={"X-Api-Key": WAHA_API_KEY, "Content-Type": "application/json"},
+        ) as client:
+            _ = await client.get(url)
+            return True
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
+        return False
+
 
 async def get_waha_client() -> WAHAClient:
     """
@@ -709,21 +728,21 @@ async def get_waha_client() -> WAHAClient:
     global _waha_client
 
     if _waha_client is None:
-        # Detectar si estamos en Docker o local
-        try:
-            # Intentar conectar con el servicio Docker primero
-            _waha_client = WAHAClient("http://waha:8000")
-            await _waha_client.get_session_status()
-            logger.info("Conectado a WAHA via Docker")
-        except:
-            try:
-                # Fallback a localhost (para desarrollo local)
-                _waha_client = WAHAClient("http://localhost:3000")
-                await _waha_client.get_session_status()
-                logger.info("Conectado a WAHA via localhost")
-            except Exception as e:
-                logger.error(f"No se pudo conectar a WAHA: {e}")
-                raise WAHAConnectionError("No se pudo establecer conexión con WAHA")
+        # Intentar primero Docker (red interna), luego localhost, con ping rápido
+        candidates = [
+            ("http://waha:8000", "Docker"),
+            ("http://localhost:3000", "localhost"),
+        ]
+
+        for base_url, label in candidates:
+            if await _quick_ping(base_url, "default"):
+                _waha_client = WAHAClient(base_url)
+                logger.info(f"Conectado a WAHA via {label}")
+                break
+
+        if _waha_client is None:
+            logger.error("WAHA no disponible en 'waha:8000' ni 'localhost:3000'")
+            raise WAHAConnectionError("No se pudo establecer conexión con WAHA")
 
     return _waha_client
 

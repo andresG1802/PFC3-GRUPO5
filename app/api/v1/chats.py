@@ -70,8 +70,7 @@ async def get_waha_dependency() -> WAHAClient:
                 }
             },
         }
-    },
-    tags=["Cache", "Admin"],
+    }
 )
 async def clear_chat_cache(
     current_admin: dict = Depends(get_current_admin),
@@ -135,8 +134,7 @@ async def clear_chat_cache(
             "description": "Timeout en comunicación con WAHA",
             "model": ErrorResponse,
         },
-    },
-    tags=["Chats", "Overview"],
+    }
 )
 async def get_chats_overview(
     limit: int = Query(default=20, ge=1, le=100),
@@ -299,8 +297,7 @@ async def get_chats_overview(
         200: {"description": "Messages retrieved successfully"},
         404: {"description": "Chat not found"},
         500: {"description": "Internal server error"},
-    },
-    tags=["Chats", "Messages"],
+    }
 )
 async def get_chat_by_id(
     interaction_id: str = Path(
@@ -445,13 +442,7 @@ async def get_chat_by_id(
     "/health/status",
     status_code=status.HTTP_200_OK,
     summary="Estado de salud del servicio de chats",
-    description="""
-    Verifica el estado completo de salud del servicio de chats y todos sus componentes.
-    
-    **Componentes verificados:** Conectividad con WAHA, estado de la sesión de WhatsApp, estadísticas del sistema de caché y rendimiento del servicio.
-    
-    **Información incluida:** Estado de la conexión WAHA, información de la sesión activa, métricas de caché y timestamp de la verificación.
-    """,
+    description="Verifica el estado completo de salud del servicio de chats y todos sus componentes.",
     responses={
         200: {
             "description": "Servicio completamente saludable",
@@ -491,8 +482,7 @@ async def get_chat_by_id(
                 }
             },
         },
-    },
-    tags=["Health", "Monitoring"],
+    }
 )
 async def get_chat_service_health(
     waha_client: WAHAClient = Depends(get_waha_dependency),
@@ -536,10 +526,7 @@ async def get_chat_service_health(
     summary="Enviar mensaje a un chat",
     description="""
     Envía un mensaje a un chat específico con soporte para diferentes tipos de mensaje.
-    
-    **Tipos soportados:** texto, imagen, video, audio, documento, ubicación, contacto, sticker.
-    
-    **Validaciones:** Los mensajes multimedia requieren media_url, los de ubicación requieren coordenadas.
+    Tipos soportados: texto, imagen, video, audio, documento, ubicación, contacto, sticker.
     """,
     responses={
         200: {

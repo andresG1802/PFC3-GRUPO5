@@ -22,6 +22,8 @@
 ## Acceso a la API
 - La API estará disponible en `http://localhost:8000`.
 - Puedes acceder a la documentación interactiva de la API en `http://localhost:8000/docs`.
+- El dashboard de WAHA se encuentra en `http://localhost:3000/dashboard`.
 
-# TODOs
-- [ ] Obtener los endpoints para obtener todos los mensajes y recibirlos en vivo.
+TODOs
+- [ ] Obtener los mensajes a los chats correspondientes en tiempo real.
+- [ ] Endpoint para actualizar el estado de una interacción. Si se quiere cambiar a estado a "derived", se debe además pasar el ID del asesor para relacionarlo con la interacción.
