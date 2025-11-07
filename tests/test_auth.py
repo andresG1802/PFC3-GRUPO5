@@ -5,6 +5,8 @@ Tests para endpoints de autenticación
 from fastapi.testclient import TestClient
 from unittest.mock import patch
 from datetime import timedelta
+import pytest
+import asyncio
 
 from app.api.v1.auth import hash_password, create_access_token, verify_password
 
@@ -105,6 +107,29 @@ class TestRegister:
         assert data["role"] == "asesor"
         assert "asesor_id" in data
 
+    def test_register_admin_success(
+        self, client: TestClient, mock_asesor_model, admin_auth_headers
+    ):
+        """Test de registro exitoso de usuario admin"""
+        response = client.post(
+            "/auth/register",
+            json={
+                "email": "adminuser@example.com",
+                "password": "newpassword!",
+                "full_name": "Admin User",
+                "role": "admin",
+            },
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["message"] == "Asesor registrado exitosamente"
+        assert data["email"] == "adminuser@example.com"
+        assert data["full_name"] == "Admin User"
+        assert data["role"] == "admin"
+        assert "asesor_id" in data
+
     def test_register_existing_email(
         self, client: TestClient, mock_asesor_model, admin_auth_headers
     ):
@@ -171,6 +196,60 @@ class TestRegister:
 
         assert response.status_code == 403
 
+    def test_register_invalid_email_format(
+        self, client: TestClient, mock_asesor_model, admin_auth_headers
+    ):
+        """Test de registro con formato de email inválido"""
+        response = client.post(
+            "/auth/register",
+            json={
+                "email": "invalid-email",
+                "password": "newpassword!",
+                "full_name": "New User",
+                "role": "asesor",
+            },
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 422
+
+    def test_register_empty_password(
+        self, client: TestClient, mock_asesor_model, admin_auth_headers
+    ):
+        """Test de registro con contraseña vacía"""
+        response = client.post(
+            "/auth/register",
+            json={
+                "email": "emptypw@example.com",
+                "password": "",
+                "full_name": "User EmptyPw",
+                "role": "asesor",
+            },
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 422
+
+    def test_register_empty_full_name(
+        self, client: TestClient, mock_asesor_model, admin_auth_headers
+    ):
+        """Test de registro con nombre completo vacío"""
+        response = client.post(
+            "/auth/register",
+            json={
+                "email": "emptyname@example.com",
+                "password": "newpassword!",
+                "full_name": "",
+                "role": "asesor",
+            },
+            headers=admin_auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["email"] == "emptyname@example.com"
+        assert data["full_name"] == ""
+
 
 class TestLogout:
     """Tests para el endpoint de logout"""
@@ -187,6 +266,7 @@ class TestLogout:
         response = client.post("/auth/logout")
 
         assert response.status_code == 403
+
 
 
 class TestGetAsesorInfo:
@@ -306,6 +386,67 @@ class TestTokenValidation:
         response = client.get("/auth/me")
 
         assert response.status_code == 403
+
+
+class TestRateLimiting:
+    """Tests para rate limiting en registro"""
+
+    def test_register_rate_limit_exceeded(
+        self, client: TestClient, mock_asesor_model, admin_auth_headers
+    ):
+        """Test excediendo límite de solicitudes por minuto en /auth/register"""
+        # Verificar si Redis está disponible y rate limiting habilitado
+        from app.config.security import rate_limit_config
+        if not rate_limit_config.enabled:
+            pytest.skip(
+                "Rate limiting deshabilitado; se omite el test de rate limiting."
+            )
+
+        try:
+            import redis.asyncio as redis
+
+            async def _ping():
+                try:
+                    r = redis.from_url(
+                        rate_limit_config.redis_url,
+                        decode_responses=True,
+                        socket_connect_timeout=1,
+                        socket_timeout=1,
+                    )
+                    await r.ping()
+                    return True
+                except Exception:
+                    return False
+
+            # Usar asyncio.run para evitar DeprecationWarning de get_event_loop
+            if not asyncio.run(_ping()):
+                pytest.skip(
+                    "Redis no disponible; se omite el test de rate limiting."
+                )
+        except Exception:
+            pytest.skip(
+                "Entorno sin redis.asyncio; se omite el test de rate limiting."
+            )
+
+        # Enviar suficientes solicitudes para exceder el límite
+        # Nota: /auth/register requiere autenticación, y el middleware aplica
+        # auth_multiplier=3 sobre los límites por defecto (5 rpm -> 15 rpm).
+        # Enviamos 20 solicitudes para garantizar un 429 cuando Redis esté disponible.
+        statuses = []
+        for i in range(20):
+            response = client.post(
+                "/auth/register",
+                json={
+                    "email": f"ratelimit{i}@example.com",
+                    "password": "newpassword!",
+                    "full_name": "Rate Limit User",
+                    "role": "asesor",
+                },
+                headers=admin_auth_headers,
+            )
+            statuses.append(response.status_code)
+
+        assert 429 in statuses
 
 
 class TestUtilityFunctions:
