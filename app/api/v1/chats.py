@@ -15,18 +15,16 @@ from ...services.waha_client import (
 )
 from ...services.cache import (
     get_cache,
-    cache_key_for_chat,
     cache_key_for_overview,
 )
 from ..models.chats import (
-    Chat,
     ChatOverview,
-    ChatResponse,
     ErrorResponse,
     MessagesListResponse,
     SendMessageRequest,
     SendMessageResponse,
     Message,
+    MessageType,
 )
 from ...utils.logging_config import get_logger
 from .auth import get_current_user, get_current_admin
@@ -342,15 +340,46 @@ async def get_chat_by_id(
                 data = ChatModel.get_messages(candidate, limit, offset)
                 messages = []
                 for msg in data.get("messages", []):
+                    # Normalizar ID (puede venir como objeto con 'serialized'/_serialized)
+                    raw_id = msg.get("id", "")
+                    if isinstance(raw_id, dict):
+                        norm_id = (
+                            raw_id.get("serialized")
+                            or raw_id.get("_serialized")
+                            or raw_id.get("id")
+                            or ""
+                        )
+                    else:
+                        norm_id = raw_id if isinstance(raw_id, str) else str(raw_id)
+
+                    # Normalizar ACK numérico a enum string
+                    raw_ack = msg.get("ack")
+                    ack_map = {
+                        -1: "ERROR",
+                        0: "PENDING",
+                        1: "SERVER",
+                        2: "DEVICE",
+                        3: "READ",
+                        4: "PLAYED",
+                    }
+                    norm_ack = (
+                        ack_map.get(raw_ack, "PENDING")
+                        if isinstance(raw_ack, int)
+                        else raw_ack
+                    )
+
+                    # Normalizar 'from_me' (puede venir como 'fromMe')
+                    from_me_val = bool(msg.get("from_me", msg.get("fromMe", False)))
+
                     messages.append(
                         Message(
-                            id=msg.get("id", ""),
+                            id=norm_id,
                             body=msg.get("body"),
                             timestamp=msg.get("timestamp", 0),
-                            from_me=bool(msg.get("from_me", False)),
+                            from_me=from_me_val,
                             type=msg.get("type", "text"),
                             from_contact=msg.get("from"),
-                            ack=msg.get("ack"),
+                            ack=norm_ack,
                         )
                     )
 
@@ -628,15 +657,39 @@ async def send_message(
             advisor_id = (
                 str(current_user.get("_id")) if current_user.get("_id") else None
             )
+            # Normalizar ID del resultado (puede ser objeto con 'serialized'/_serialized)
+            raw_id = result.get("id", "")
+            if isinstance(raw_id, dict):
+                norm_id = (
+                    raw_id.get("serialized")
+                    or raw_id.get("_serialized")
+                    or raw_id.get("id")
+                    or ""
+                )
+            else:
+                norm_id = raw_id if isinstance(raw_id, str) else str(raw_id)
+
+            # Normalizar ACK numérico a enum string
+            raw_ack = result.get("ack")
+            ack_map = {
+                -1: "ERROR",
+                0: "PENDING",
+                1: "SERVER",
+                2: "DEVICE",
+                3: "READ",
+                4: "PLAYED",
+            }
+            norm_ack = ack_map.get(raw_ack, "PENDING") if isinstance(raw_ack, int) else raw_ack
+
             ChatModel.add_message(
                 chat_id,
                 {
-                    "id": result.get("id"),
+                    "id": norm_id,
                     "body": message_request.message,
                     "timestamp": result.get("timestamp", 0),
                     "type": message_request.type.value,
                     "from_me": True,
-                    "ack": result.get("ack"),
+                    "ack": norm_ack,
                     "metadata": message_request.metadata,
                     "advisor_id": advisor_id,
                 },
@@ -645,8 +698,9 @@ async def send_message(
         except Exception as persist_err:
             logger.warning(f"No se pudo persistir el mensaje en Mongo: {persist_err}")
 
+        # Construir respuesta con ID normalizado
         response = SendMessageResponse(
-            id=result.get("id", ""),
+            id=norm_id,
             status=result.get("status", "sent"),
             timestamp=result.get("timestamp", 0),
         )

@@ -263,25 +263,29 @@ class WAHAClient(LoggerMixin):
         self, limit: int = 20, offset: int = 0, ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Obtiene vista general de chats optimizada desde WAHA
+        Get an optimized chats overview from WAHA using POST.
+
+        Uses `POST /api/{session}/chats/overview` so we can pass many
+        `ids` in the body when needed (per WAHA OpenAPI).
 
         Args:
-            limit: Número máximo de chats a obtener
-            offset: Desplazamiento para paginación
+            limit: Max chats to fetch
+            offset: Pagination offset
+            ids: Optional list of chat ids to filter
 
         Returns:
-            Lista de chats en formato overview
+            List of overview chat objects
         """
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
-            params = {"limit": limit, "offset": offset}
+            payload: Dict[str, Any] = {"limit": limit, "offset": offset}
             if ids:
                 # WAHA expects 'ids' as array of chatIds (e.g. 549xxxx@c.us)
-                params["ids"] = ids
+                payload["ids"] = ids
 
-            logger.debug(f"Obteniendo overview de chats: {url} - Params: {params}")
+            logger.debug(f"Obteniendo overview de chats (POST): {url} - Body: {payload}")
 
-            response = await self.client.get(url, params=params)
+            response = await self.client.post(url, json=payload)
             data = self._handle_response(response)
 
             # WAHA puede devolver directamente una lista o un objeto con lista
@@ -491,28 +495,37 @@ class WAHAClient(LoggerMixin):
 
     @retry_on_failure(max_retries=3, delay=1.0)
     async def send_message(
-        self, chat_id: str, message: str, message_type: str = "text"
+        self, chat_id: str, message: str, message_type: str = "text", **kwargs
     ) -> Dict[str, Any]:
         """
-        Envía un mensaje a un chat específico
+        Send a message using WAHA official endpoints.
 
-        Args:
-            chat_id: ID del chat
-            message: Contenido del mensaje
-            message_type: Tipo de mensaje (text, image, etc.)
+        Routing:
+        - text      -> POST /api/sendText
+        - image     -> POST /api/sendFile
+        - document  -> POST /api/sendFile
+        - audio     -> POST /api/sendFile
+        - voice     -> POST /api/sendVoice
+        - video     -> POST /api/sendVideo
 
-        Returns:
-            Dict con información del mensaje enviado
+        Unsupported in this client for now: location, contact, sticker.
         """
         start_time = time.time()
         try:
-            url = f"{self.base_url}/api/{self.session_name}/chats/{chat_id}/messages"
-            payload = {"text": message, "type": message_type}
+            mt = (message_type or "text").lower()
 
-            logger.debug(f"Enviando mensaje: {url} con payload: {payload}")
-
-            response = await self.client.post(url, json=payload)
-            data = self._handle_response(response)
+            if mt == "text":
+                data = await self._send_text_fallback(chat_id, message, **kwargs)  # primary path
+            elif mt in ("image", "document", "audio"):
+                data = await self._send_file(chat_id, kwargs.get("media_url"), filename=kwargs.get("filename"), caption=kwargs.get("caption"))
+            elif mt == "voice":
+                data = await self._send_voice(chat_id, kwargs.get("media_url"))
+            elif mt == "video":
+                data = await self._send_video(chat_id, kwargs.get("media_url"), caption=kwargs.get("caption"))
+            else:
+                raise WAHAConnectionError(
+                    f"Tipo de mensaje no soportado por WAHAClient: {message_type}"
+                )
 
             duration_ms = (time.time() - start_time) * 1000
             self.log_operation(
@@ -545,6 +558,141 @@ class WAHAClient(LoggerMixin):
                 message_type=message_type,
             )
             raise WAHAConnectionError("No se pudo conectar con WAHA")
+
+    async def _send_text_fallback(
+        self, chat_id: str, text: str, **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Primary method for sending text messages via /api/sendText.
+        """
+        start_time = time.time()
+        url = f"{self.base_url}/api/sendText"
+
+        payload: Dict[str, Any] = {
+            "chatId": chat_id,
+            "text": text,
+            "session": self.session_name,
+        }
+
+        # Mapear solo campos relevantes para sendText
+        try:
+            if isinstance(kwargs, dict) and kwargs:
+                if kwargs.get("reply_to"):
+                    payload["reply_to"] = kwargs.get("reply_to")
+                # Si se proporcionan flags de vista previa de links, pasar también
+                if "linkPreview" in kwargs:
+                    payload["linkPreview"] = kwargs.get("linkPreview")
+                if "linkPreviewHighQuality" in kwargs:
+                    payload["linkPreviewHighQuality"] = kwargs.get(
+                        "linkPreviewHighQuality"
+                    )
+        except Exception:
+            pass
+
+        logger.debug(f"Fallback sendText: {url} con payload: {payload}")
+
+        response = await self.client.post(url, json=payload)
+        data = self._handle_response(response)
+
+        duration_ms = (time.time() - start_time) * 1000
+        self.log_operation(
+            "send_text_fallback_success",
+            duration_ms=duration_ms,
+            chat_id=chat_id,
+            message_type="text",
+            message_id=data.get("id"),
+        )
+
+        return data
+
+    async def _send_file(
+        self, chat_id: str, url_or_media: Optional[str], *, filename: Optional[str] = None, caption: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a file (image/document/audio) via /api/sendFile using URL.
+        """
+        if not url_or_media:
+            raise WAHAConnectionError("media_url requerido para enviar archivo")
+        start_time = time.time()
+        url = f"{self.base_url}/api/sendFile"
+        payload: Dict[str, Any] = {
+            "chatId": chat_id,
+            "url": url_or_media,
+            "session": self.session_name,
+        }
+        if filename:
+            payload["filename"] = filename
+        if caption:
+            payload["caption"] = caption
+
+        logger.debug(f"sendFile: {url} con payload: {payload}")
+        response = await self.client.post(url, json=payload)
+        data = self._handle_response(response)
+        duration_ms = (time.time() - start_time) * 1000
+        self.log_operation(
+            "send_file_success",
+            duration_ms=duration_ms,
+            chat_id=chat_id,
+            message_type="file",
+            message_id=data.get("id"),
+        )
+        return data
+
+    async def _send_voice(self, chat_id: str, url_or_media: Optional[str]) -> Dict[str, Any]:
+        """
+        Send a voice note via /api/sendVoice using URL.
+        """
+        if not url_or_media:
+            raise WAHAConnectionError("media_url requerido para enviar voz")
+        start_time = time.time()
+        url = f"{self.base_url}/api/sendVoice"
+        payload: Dict[str, Any] = {
+            "chatId": chat_id,
+            "url": url_or_media,
+            "session": self.session_name,
+        }
+        logger.debug(f"sendVoice: {url} con payload: {payload}")
+        response = await self.client.post(url, json=payload)
+        data = self._handle_response(response)
+        duration_ms = (time.time() - start_time) * 1000
+        self.log_operation(
+            "send_voice_success",
+            duration_ms=duration_ms,
+            chat_id=chat_id,
+            message_type="voice",
+            message_id=data.get("id"),
+        )
+        return data
+
+    async def _send_video(
+        self, chat_id: str, url_or_media: Optional[str], *, caption: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a video via /api/sendVideo using URL.
+        """
+        if not url_or_media:
+            raise WAHAConnectionError("media_url requerido para enviar video")
+        start_time = time.time()
+        url = f"{self.base_url}/api/sendVideo"
+        payload: Dict[str, Any] = {
+            "chatId": chat_id,
+            "url": url_or_media,
+            "session": self.session_name,
+        }
+        if caption:
+            payload["caption"] = caption
+        logger.debug(f"sendVideo: {url} con payload: {payload}")
+        response = await self.client.post(url, json=payload)
+        data = self._handle_response(response)
+        duration_ms = (time.time() - start_time) * 1000
+        self.log_operation(
+            "send_video_success",
+            duration_ms=duration_ms,
+            chat_id=chat_id,
+            message_type="video",
+            message_id=data.get("id"),
+        )
+        return data
 
 
 # Instancia global del cliente (se inicializa cuando se necesite)
