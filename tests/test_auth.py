@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch
 from datetime import timedelta
 
-from app.api.v1.auth import hash_password, create_access_token
+from app.api.v1.auth import hash_password, create_access_token, verify_password
 
 
 class TestLogin:
@@ -90,7 +90,7 @@ class TestRegister:
             "/auth/register",
             json={
                 "email": "newuser@example.com",
-                "password": "newpassword",
+                "password": "newpassword!",
                 "full_name": "New User",
                 "role": "asesor",
             },
@@ -113,7 +113,7 @@ class TestRegister:
             "/auth/register",
             json={
                 "email": "test@example.com",  # Email que ya existe
-                "password": "newpassword",
+                "password": "newpassword!",
                 "full_name": "New User",
                 "role": "asesor",
             },
@@ -131,7 +131,7 @@ class TestRegister:
             "/auth/register",
             json={
                 "email": "newuser@example.com",
-                "password": "newpassword",
+                "password": "newpassword!",
                 "full_name": "New User",
                 "role": "invalid_role",
             },
@@ -147,7 +147,7 @@ class TestRegister:
             "/auth/register",
             json={
                 "email": "newuser@example.com",
-                "password": "newpassword",
+                "password": "newpassword!",
                 "full_name": "New User",
                 "role": "asesor",
             },
@@ -163,7 +163,7 @@ class TestRegister:
             "/auth/register",
             json={
                 "email": "newuser@example.com",
-                "password": "newpassword",
+                "password": "newpassword!",
                 "full_name": "New User",
                 "role": "asesor",
             },
@@ -222,7 +222,7 @@ class TestChangePassword:
         """Test de cambio de contraseña exitoso"""
         response = client.post(
             "/auth/change-password",
-            json={"current_password": "password", "new_password": "newpassword123"},
+            json={"current_password": "password", "new_password": "newpassword123!"},
             headers=auth_headers,
         )
 
@@ -237,7 +237,7 @@ class TestChangePassword:
             "/auth/change-password",
             json={
                 "current_password": "wrong_password",
-                "new_password": "newpassword123",
+                "new_password": "newpassword123!",
             },
             headers=auth_headers,
         )
@@ -249,7 +249,7 @@ class TestChangePassword:
         """Test de cambio de contraseña sin autenticación"""
         response = client.post(
             "/auth/change-password",
-            json={"current_password": "password", "new_password": "newpassword123"},
+            json={"current_password": "password", "new_password": "newpassword123!"},
         )
 
         assert response.status_code == 403
@@ -313,12 +313,12 @@ class TestUtilityFunctions:
 
     def test_hash_password(self):
         """Test de función de hash de contraseña"""
-        password = "test_password"
+        password = "test_password!"
         hashed = hash_password(password)
 
         assert hashed != password
-        assert len(hashed) == 64  # SHA-256 produce hash de 64 caracteres
-        assert hash_password(password) == hashed  # Debe ser determinístico
+        assert hashed.startswith("pbkdf2_sha256$")
+        assert verify_password(password, hashed)
 
     def test_create_access_token(self):
         """Test de creación de token de acceso"""

@@ -9,6 +9,8 @@ from ..envs import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
 from datetime import datetime, timedelta, timezone
 import jwt
 import hashlib
+import os
+import hmac
 
 # Importar modelos desde el módulo centralizado
 from ..models.auth import (
@@ -27,10 +29,48 @@ router = APIRouter(tags=["Autenticación"])
 security = HTTPBearer()
 
 
-# Función para hashear contraseñas (mejorada)
+# Configuración de hashing de contraseñas
+PBKDF2_ITERATIONS = 120000
+SALT_BYTES = 12  # Salt de 12 bytes según requisito
+
+
 def hash_password(password: str) -> str:
-    """Hashea una contraseña usando SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Genera un hash seguro usando PBKDF2-HMAC-SHA256 con salt de 12 bytes.
+
+    Formato de almacenado: pbkdf2_sha256$<iteraciones>$<salt_hex>$<hash_hex>
+    """
+    salt = os.urandom(SALT_BYTES)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PBKDF2_ITERATIONS)
+    return (
+        f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
+    )
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Verifica una contraseña contra un hash almacenado.
+
+    - Soporta formato PBKDF2-HMAC-SHA256 con salt y iteraciones.
+    - Mantiene compatibilidad con hashes legacy de SHA-256 plano (64 hex).
+    """
+    try:
+        if stored_hash.startswith("pbkdf2_sha256$"):
+            try:
+                _, iter_str, salt_hex, hash_hex = stored_hash.split("$")
+                iterations = int(iter_str)
+                salt = bytes.fromhex(salt_hex)
+                expected = bytes.fromhex(hash_hex)
+                dk = hashlib.pbkdf2_hmac(
+                    "sha256", password.encode(), salt, iterations
+                )
+                return hmac.compare_digest(dk, expected)
+            except Exception:
+                return False
+
+        # Compatibilidad: SHA-256 plano (no recomendado)
+        legacy = hashlib.sha256(password.encode()).hexdigest()
+        return hmac.compare_digest(legacy, stored_hash)
+    except Exception:
+        return False
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -113,7 +153,7 @@ async def login(login_data: LoginRequest):
     """
     asesor = AsesorModel.find_by_email(login_data.email)
 
-    if not asesor or asesor["password"] != hash_password(login_data.password):
+    if not asesor or not verify_password(login_data.password, asesor.get("password", "")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
@@ -253,7 +293,7 @@ async def change_password(
         HTTPException: Si la contraseña actual es incorrecta
     """
     # Verificar contraseña actual
-    if current_user["password"] != hash_password(password_data.current_password):
+    if not verify_password(password_data.current_password, current_user.get("password", "")):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Contraseña actual incorrecta",
