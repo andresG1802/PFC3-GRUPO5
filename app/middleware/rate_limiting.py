@@ -308,10 +308,5 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             limit_info.get("reset_time_rph", 0)
         )
 
-        # Headers adicionales para mejor comprensión
-        response.headers["X-RateLimit-Policy"] = "chat-advisor-optimized"
-        response.headers["X-RateLimit-Window-Minute"] = "60"
-        response.headers["X-RateLimit-Window-Hour"] = "3600"
-
         if "retry_after" in limit_info:
             response.headers["Retry-After"] = str(limit_info["retry_after"])

@@ -45,3 +45,5 @@ tests/
 # Archivos temporales
 *.tmp
 *.temp
+
+.github/

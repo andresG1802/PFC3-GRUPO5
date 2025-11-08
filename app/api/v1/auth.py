@@ -173,8 +173,6 @@ async def login(login_data: LoginRequest):
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
-        expires_in=JWT_EXPIRE_MINUTES * 60,
         asesor_id=str(asesor.get("_id")),
     )
 

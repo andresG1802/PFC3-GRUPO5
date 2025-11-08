@@ -1,7 +1,15 @@
-"""Endpoints para gestión de chats de WhatsApp"""
+"""WhatsApp Chats API endpoints
+
+Adds SSE streaming for real-time chat messages per interaction and
+provides utilities to resolve chat identifiers from interactions.
+"""
 
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
-from typing import Dict, Any
+from fastapi.responses import StreamingResponse
+from typing import Dict, Any, AsyncGenerator, Optional
+from pydantic import BaseModel
+import asyncio
+import json
 from datetime import datetime, timezone
 
 from app.api import envs
@@ -29,6 +37,8 @@ from ..models.chats import (
 from ...utils.logging_config import get_logger
 from .auth import get_current_user, get_current_admin
 from ...database.models import InteractionModel, ChatModel
+from ..models.interactions import InteractionState
+from ...database.models import AsesorModel
 
 # Logger específico para este módulo
 logger = get_logger(__name__)
@@ -432,6 +442,218 @@ async def get_chat_by_id(
         logger.error(
             f"Error inesperado obteniendo mensajes para interaction_id {interaction_id}: {e}"
         )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor",
+        )
+
+
+@router.get(
+    "/{interaction_id}/stream",
+    summary="Stream real-time chat messages by interaction (SSE)",
+    description=(
+        "Server-Sent Events (SSE) endpoint that streams real-time messages for the chat "
+        "associated with a given interaction. Clients should use EventSource on the frontend."
+    ),
+    responses={
+        200: {"description": "SSE stream established"},
+        404: {"description": "Chat not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def stream_chat_by_interaction(
+    interaction_id: str = Path(
+        ...,
+        description="Unique interaction ID (MongoDB ObjectId)",
+        min_length=24,
+        max_length=24,
+        pattern=r"^[a-fA-F0-9]{24}$",
+    ),
+    heartbeat_interval: int = Query(15, ge=5, le=120, description="Heartbeat interval in seconds"),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    """SSE stream for messages of the chat linked to an interaction.
+
+    Resolves a chat identifier using the same strategy as `get_chat_by_id` and
+    subscribes to a Redis pub/sub channel to forward events to the client.
+    """
+    try:
+        # Resolve chat channel candidates
+        candidates = [interaction_id]
+        interaction = InteractionModel.find_by_id(interaction_id)
+        if interaction:
+            chat_id_ref = (interaction.get("chat_id") or "").strip()
+            phone_ref = (interaction.get("phone") or "").strip()
+            if chat_id_ref:
+                candidates.append(chat_id_ref)
+            if phone_ref:
+                candidates.append(phone_ref)
+
+        # Pick the first candidate with an existing chat document
+        channel_id: Optional[str] = None
+        for candidate in candidates:
+            if ChatModel.get_chat(candidate):
+                channel_id = candidate
+                break
+
+        # If no existing chat, but interaction pending, use inferred phone as channel
+        if channel_id is None and interaction and interaction.get("state") == InteractionState.PENDING.value:
+            inferred_chat_id = (interaction.get("phone") or "").strip()
+            channel_id = inferred_chat_id if inferred_chat_id else None
+
+        if not channel_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Chat no encontrado para streaming",
+            )
+
+        cache = get_cache()
+        redis_client = cache.redis_client
+        pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
+        channel_name = f"{cache.key_prefix}stream:{channel_id}"
+        pubsub.subscribe(channel_name)
+
+        async def event_generator() -> AsyncGenerator[bytes, None]:
+            """Yield SSE frames from Redis pub/sub and periodic heartbeats."""
+            try:
+                last_ping = asyncio.get_event_loop().time()
+                while True:
+                    message = pubsub.get_message(timeout=1.0)
+                    if message and message.get("type") == "message":
+                        data = message.get("data")
+                        # Ensure bytes -> str
+                        if isinstance(data, bytes):
+                            data = data.decode("utf-8", errors="ignore")
+                        payload = data if isinstance(data, str) else json.dumps(data)
+                        yield f"data: {payload}\n\n".encode("utf-8")
+
+                    # Heartbeat
+                    now = asyncio.get_event_loop().time()
+                    if now - last_ping >= heartbeat_interval:
+                        last_ping = now
+                        yield b":ping\n\n"
+
+                    await asyncio.sleep(0.2)
+            except asyncio.CancelledError:
+                # Client disconnected
+                pass
+            finally:
+                try:
+                    pubsub.unsubscribe(channel_name)
+                    pubsub.close()
+                except Exception:
+                    pass
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error starting SSE stream for interaction {interaction_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor",
+        )
+
+
+class InteractionStatePatchRequest(BaseModel):
+    """Request body for interaction state update.
+
+    If state is set to 'derived', an 'asesor_id' must be provided.
+    """
+    state: InteractionState
+    asesor_id: Optional[str] = None
+
+
+@router.patch(
+    "/interactions/{interaction_id}/state",
+    status_code=status.HTTP_200_OK,
+    summary="Update interaction state",
+    description=(
+        "Updates interaction state. When setting state to 'derived', an 'asesor_id' is required "
+        "and the advisor will be assigned to the interaction."
+    ),
+    responses={
+        200: {"description": "State updated successfully"},
+        400: {"description": "Invalid request"},
+        404: {"description": "Interaction or advisor not found"},
+        500: {"description": "Internal server error"},
+    },
+)
+async def update_interaction_state(
+    payload: InteractionStatePatchRequest,
+    interaction_id: str = Path(
+        ...,
+        description="Unique interaction ID (MongoDB ObjectId)",
+        min_length=24,
+        max_length=24,
+        pattern=r"^[a-fA-F0-9]{24}$",
+    ),
+    current_user: dict = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Update the interaction state with validations for 'derived'."""
+    try:
+        # Validate interaction exists
+        interaction = InteractionModel.find_by_id(interaction_id)
+        if not interaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Interaction not found",
+            )
+
+        update_fields: Dict[str, Any] = {"state": payload.state.value}
+
+        # If derived, asesor_id must be provided and valid
+        if payload.state == InteractionState.DERIVED:
+            if not payload.asesor_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="asesor_id is required when state is 'derived'",
+                )
+            # Validate advisor exists
+            asesor = AsesorModel.find_by_id(payload.asesor_id)
+            if not asesor:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Advisor not found",
+                )
+            # Assign advisor and set assignedAt via model helper
+            InteractionModel.assign_asesor(interaction_id, payload.asesor_id)
+            update_fields["asesor_id"] = payload.asesor_id
+
+        # Apply update
+        updated = InteractionModel.update_by_id(interaction_id, update_fields)
+        if not updated:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update interaction",
+            )
+
+        # Optional: invalidate related caches (overview)
+        try:
+            cache = get_cache()
+            cache.delete_pattern("overview:*")
+        except Exception:
+            pass
+
+        return {
+            "message": "Interaction state updated successfully",
+            "interaction_id": interaction_id,
+            "state": payload.state.value,
+            "asesor_id": update_fields.get("asesor_id"),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error updating interaction state {interaction_id}: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",

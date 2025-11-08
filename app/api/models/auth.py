@@ -16,8 +16,6 @@ class TokenResponse(BaseModel):
     """Modelo para respuesta de token"""
 
     access_token: str
-    token_type: str
-    expires_in: int
     asesor_id: str
 
 

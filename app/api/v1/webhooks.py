@@ -25,20 +25,22 @@ router = APIRouter(tags=["Webhooks"])
 
 async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> None:
     """
-    Procesa eventos de webhook en segundo plano
+    Process webhook events in background.
     """
     try:
         cache = get_cache()
+        redis_client = cache.redis_client
 
         if event_type == "message":
-            # Invalidar cache de mensajes del chat afectado
+            # Invalidate caches for the affected chat
             chat_id = event_data.get("from")
             if chat_id:
                 cache.delete_pattern(f"messages:{chat_id}:*")
                 cache.delete_pattern(f"chat:{chat_id}")
-                logger.info(f"Cache invalidado para chat: {chat_id}")
+                logger.info(f"Cache invalidated for chat: {chat_id}")
 
-                # Persistir mensaje entrante en MongoDB
+                # Persist incoming message in MongoDB
+                interaction = None
                 try:
                     interaction = InteractionModel.find_by_chat_id(chat_id)
                     ChatModel.add_message(
@@ -55,39 +57,72 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                         interaction_id=interaction.get("_id") if interaction else None,
                     )
                 except Exception as e:
-                    logger.warning(f"No se pudo persistir el mensaje entrante: {e}")
+                    logger.warning(f"Failed to persist incoming message: {e}")
+
+                # Publish real-time event to Redis channel for SSE subscribers
+                try:
+                    channel_name = f"{cache.key_prefix}stream:{chat_id}"
+                    payload = {
+                        "type": "message",
+                        "chat_id": chat_id,
+                        "interaction_id": (interaction.get("_id") if interaction else None),
+                        "message": {
+                            "id": event_data.get("id"),
+                            "body": event_data.get("body"),
+                            "timestamp": event_data.get("timestamp", 0),
+                            "type": event_data.get("type", "text"),
+                            "from_me": bool(event_data.get("fromMe", False)),
+                            "ack": event_data.get("ack"),
+                            "from": event_data.get("from"),
+                        },
+                    }
+                    redis_client.publish(channel_name, json.dumps(payload))
+                except Exception as e:
+                    logger.warning(f"Failed to publish SSE event for chat {chat_id}: {e}")
 
         elif event_type == "message.ack":
-            # Actualizar estado de mensaje
+            # Update message state and publish ACK to stream
             message_id = event_data.get("id")
+            chat_id = event_data.get("from")
             if message_id:
                 cache.delete_pattern(f"message:{message_id}")
-                logger.info(f"Cache de mensaje actualizado: {message_id}")
+                logger.info(f"Message cache updated: {message_id}")
+                if chat_id:
+                    try:
+                        channel_name = f"{cache.key_prefix}stream:{chat_id}"
+                        payload = {
+                            "type": "message.ack",
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "ack": event_data.get("ack"),
+                            "timestamp": event_data.get("timestamp", 0),
+                        }
+                        redis_client.publish(channel_name, json.dumps(payload))
+                    except Exception as e:
+                        logger.warning(f"Failed to publish ACK SSE event for chat {chat_id}: {e}")
 
         elif event_type == "session.status":
-            # Actualizar estado de sesión
+            # Update WhatsApp session status in cache
             session = event_data.get("session")
             status_value = event_data.get("status")
             if session:
                 cache.set(f"session:{session}:status", status_value, ttl=3600)
-                logger.info(
-                    f"Estado de sesión actualizado: {session} -> {status_value}"
-                )
+                logger.info(f"Session status updated: {session} -> {status_value}")
 
         elif event_type == "presence.update":
-            # Actualizar presencia de contacto
+            # Update contact presence in cache
             contact_id = event_data.get("id")
             presence = event_data.get("presence")
             if contact_id:
                 cache.set(f"presence:{contact_id}", presence, ttl=300)
-                logger.info(f"Presencia actualizada: {contact_id} -> {presence}")
+                logger.info(f"Presence updated: {contact_id} -> {presence}")
 
-        # Almacenar evento para posible procesamiento posterior
+        # Store event for potential later inspection
         event_key = f"webhook_event:{datetime.now().isoformat()}"
         cache.set(event_key, {"type": event_type, "data": event_data}, ttl=86400)
 
     except Exception as e:
-        logger.error(f"Error procesando evento webhook {event_type}: {e}")
+        logger.error(f"Error processing webhook event {event_type}: {e}")
 
 
 @router.post(

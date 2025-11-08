@@ -65,9 +65,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             # Remover headers que pueden revelar información del servidor
             self._remove_server_headers(response)
 
-            # Agregar header de seguridad personalizado
-            response.headers["X-Security-Headers"] = "enabled"
-
             return response
 
         except Exception as e:
@@ -87,9 +84,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         """Remueve headers que revelan información del servidor"""
         headers_to_remove = [
             "Server",
+            "server",
             "X-Powered-By",
-            "X-AspNet-Version",
-            "X-AspNetMvc-Version",
         ]
 
         for header in headers_to_remove:
