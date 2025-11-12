@@ -28,6 +28,7 @@ from ...services.cache import (
 from ..models.chats import (
     ChatOverview,
     ErrorResponse,
+    InteractionStatePatchRequest,
     MessagesListResponse,
     SendMessageRequest,
     SendMessageResponse,
@@ -583,16 +584,31 @@ async def stream_chat_by_interaction(
     subscribes to a Redis pub/sub channel to forward events to the client.
     """
     try:
-        # Resolve chat channel candidates
-        candidates = [interaction_id]
+        # Authorization: only the assigned advisor can subscribe to this interaction's stream
+        # Find interaction and verify assignment before opening the stream
         interaction = InteractionModel.find_by_id(interaction_id)
-        if interaction:
-            chat_id_ref = (interaction.get("chat_id") or "").strip()
-            phone_ref = (interaction.get("phone") or "").strip()
-            if chat_id_ref:
-                candidates.append(chat_id_ref)
-            if phone_ref:
-                candidates.append(phone_ref)
+        if not interaction:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Interacción no encontrada",
+            )
+
+        assigned_asesor_id = str(interaction.get("asesor_id") or "")
+        current_user_id = str(current_user.get("_id") or "")
+        if not assigned_asesor_id or assigned_asesor_id != current_user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No autorizado: asesor no asignado a la interacción",
+            )
+
+        # Resolve chat channel candidates (after authorization)
+        candidates = [interaction_id]
+        chat_id_ref = (interaction.get("chat_id") or "").strip()
+        phone_ref = (interaction.get("phone") or "").strip()
+        if chat_id_ref:
+            candidates.append(chat_id_ref)
+        if phone_ref:
+            candidates.append(phone_ref)
 
         # Pick the first candidate with an existing chat document
         channel_id: Optional[str] = None
@@ -668,13 +684,117 @@ async def stream_chat_by_interaction(
         )
 
 
-class InteractionStatePatchRequest(BaseModel):
-    """Request body for interaction state update.
+@router.get(
+    "/stream/assigned",
+    summary="Stream de mensajes para interacciones DERIVED asignadas al asesor (SSE)",
+    description=(
+        "SSE que agrega mensajes de todas las interacciones en estado 'derived' "
+        "asignadas al asesor autenticado. Emite notificaciones con interaction_id, from y body."
+    ),
+    responses={
+        200: {"description": "SSE stream establecido"},
+        403: {"description": "No autorizado"},
+        404: {"description": "No hay chats DERIVED asignados con canal activo"},
+        500: {"description": "Error interno del servidor"},
+    },
+)
+async def stream_assigned_interactions(
+    state: InteractionState = Query(InteractionState.DERIVED, description="Estado a filtrar"),
+    heartbeat_interval: int = Query(15, ge=5, le=120, description="Intervalo de heartbeat en segundos"),
+    current_user: dict = Depends(get_current_user),
+) -> StreamingResponse:
+    try:
+        asesor_id = str(current_user.get("_id", "")).strip()
+        if not asesor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No autorizado",
+            )
 
-    If state is set to 'derived', an 'asesor_id' must be provided.
-    """
-    state: InteractionState
-    asesor_id: Optional[str] = None
+        assigned = InteractionModel.find_by_asesor(asesor_id) or []
+        assigned = [i for i in assigned if i.get("state") == state.value]
+
+        channel_ids = set()
+        for i in assigned:
+            chat_id_ref = (i.get("chat_id") or "").strip()
+            phone_ref = (i.get("phone") or "").strip()
+
+            candidate = None
+            if chat_id_ref and ChatModel.get_chat(chat_id_ref):
+                candidate = chat_id_ref
+            elif phone_ref and ChatModel.get_chat(phone_ref):
+                candidate = phone_ref
+
+            if candidate:
+                channel_ids.add(candidate)
+
+        if not channel_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No hay chats DERIVED asignados con canal activo",
+            )
+
+        cache = get_cache()
+        redis_client = cache.redis_client
+        pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
+        channel_names = [f"{cache.key_prefix}stream:{cid}" for cid in channel_ids]
+        pubsub.subscribe(*channel_names)
+
+        async def event_generator() -> AsyncGenerator[bytes, None]:
+            try:
+                last_ping = asyncio.get_event_loop().time()
+                while True:
+                    message = pubsub.get_message(timeout=1.0)
+                    if message and message.get("type") == "message":
+                        data = message.get("data")
+                        if isinstance(data, bytes):
+                            data = data.decode("utf-8", errors="ignore")
+                        try:
+                            payload = json.loads(data) if isinstance(data, str) else data
+                        except Exception:
+                            payload = {"raw": data}
+
+                        notification = {
+                            "type": payload.get("type"),
+                            "interaction_id": payload.get("interaction_id"),
+                            "chat_id": payload.get("chat_id"),
+                            "from": (payload.get("message") or {}).get("from"),
+                            "body": (payload.get("message") or {}).get("body"),
+                            "timestamp": (payload.get("message") or {}).get("timestamp", 0),
+                        }
+                        yield f"data: {json.dumps(notification)}\n\n".encode("utf-8")
+
+                    now = asyncio.get_event_loop().time()
+                    if now - last_ping >= heartbeat_interval:
+                        last_ping = now
+                        yield b":ping\n\n"
+
+                    await asyncio.sleep(0.2)
+            except asyncio.CancelledError:
+                pass
+            finally:
+                try:
+                    pubsub.unsubscribe(*channel_names)
+                    pubsub.close()
+                except Exception:
+                    pass
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error iniciando SSE agregado para asesor {current_user.get('_id')}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error interno del servidor",
+        )
 
 
 @router.patch(

@@ -158,6 +158,15 @@ class MessagesListResponse(BaseModel):
     )
 
 
+class InteractionStatePatchRequest(BaseModel):
+    """Request body for interaction state update.
+
+    If state is set to 'derived', an 'asesor_id' must be provided.
+    """
+    state: InteractionState
+    asesor_id: Optional[str] = None
+
+
 class SendMessageRequest(BaseModel):
     """Solicitud para enviar mensaje"""
 
