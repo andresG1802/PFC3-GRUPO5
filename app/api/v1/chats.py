@@ -159,6 +159,7 @@ async def get_chats_overview(
         # Construir filtro de IDs desde interacciones (usar 'phone') y mapear _id
         ids_filter_set = set()
         interaction_id_map: dict[str, str] = {}
+        interactions: list[dict] = []
         try:
             total_interactions = InteractionModel.count_all(state="pending")
             interactions = (
@@ -191,26 +192,65 @@ async def get_chats_overview(
             limit, offset, ids_filter if ids_filter else None
         )
         cached_result = cache.get(cache_key)
-        if cached_result:
-            logger.info(
-                f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
-            )
-            return {
-                "success": True,
-                "data": {
-                    "summary": {
-                        "total_chats": len(cached_result),
-                        "limit": limit,
-                        "offset": offset,
+        if cached_result is not None:
+            # Validar que el contenido en caché esté alineado con las interacciones actuales
+            if ids_filter:
+                try:
+                    cached_ids = {
+                        (c or {}).get("id")
+                        for c in (cached_result or [])
+                        if (c or {}).get("id")
+                    }
+                    missing_ids = set(ids_filter) - cached_ids
+                except Exception:
+                    missing_ids = set(ids_filter)  # Fuerza invalidación si falla
+
+                if missing_ids or (len(cached_result) == 0 and len(ids_filter) > 0):
+                    logger.info(
+                        f"Invalidando cache overview por desalineación con DB. Faltantes={len(missing_ids)}"
+                    )
+                    # Invalida esta entrada de caché y continua al fetch fresco
+                    try:
+                        cache.delete(cache_key)
+                    except Exception:
+                        pass
+                else:
+                    logger.info(
+                        f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
+                    )
+                    return {
+                        "success": True,
+                        "data": {
+                            "summary": {
+                                "total_chats": len(cached_result),
+                                "limit": limit,
+                                "offset": offset,
+                            },
+                            "chats": cached_result,
+                        },
+                        "message": "Overview de chats obtenido desde cache",
+                    }
+            else:
+                logger.info(
+                    f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
+                )
+                return {
+                    "success": True,
+                    "data": {
+                        "summary": {
+                            "total_chats": len(cached_result),
+                            "limit": limit,
+                            "offset": offset,
+                        },
+                        "chats": cached_result,
                     },
-                    "chats": cached_result,
-                },
-                "message": "Overview de chats obtenido desde cache",
-            }
+                    "message": "Overview de chats obtenido desde cache",
+                }
 
         logger.info(f"Obteniendo chats overview - limit: {limit}, offset: {offset}")
 
         # Intentar obtener overview optimizado con filtro por ids; fallback a overview sin filtro o a chats normales
+        raw_chats = []
         try:
             if ids_filter:
                 raw_chats = await waha_client.get_chats_overview(
@@ -221,8 +261,15 @@ async def get_chats_overview(
                     limit=limit, offset=offset
                 )
         except Exception:
-            logger.warning("Overview no disponible, usando chats normales")
-            raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
+            logger.warning("Overview no disponible, intentando fallback de chats")
+            try:
+                raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
+            except Exception as e:
+                # Si también falla, continuamos con lista vacía para construir fallback desde DB
+                logger.error(
+                    f"Fallback de chats falló: {e}. Se usará listado mínimo desde DB"
+                )
+                raw_chats = []
 
         # Si hubo fallback y tenemos filtro, aplicar filtrado local por id
         if ids_filter:
@@ -262,6 +309,53 @@ async def get_chats_overview(
                 )
                 continue
 
+        # Fallback: si faltan chats esperados por interacciones, agregarlos como mínimos
+        if ids_filter:
+            try:
+                present_ids = {c.get("id") for c in overview_chats if c.get("id")}
+                expected_ids = set(ids_filter)
+                missing_ids = expected_ids - present_ids
+            except Exception:
+                missing_ids = set()
+
+            if missing_ids:
+                logger.info(
+                    f"Agregando {len(missing_ids)} chats mínimos desde interacciones (fallback)"
+                )
+                # Indexar interacciones por clave (phone o chat_id)
+                inter_index: dict[str, dict] = {}
+                try:
+                    for it in interactions or []:
+                        key = (it.get("phone") or it.get("chat_id") or "").strip()
+                        if key:
+                            inter_index[key] = it
+                except Exception:
+                    inter_index = {}
+
+                for mid in missing_ids:
+                    it = inter_index.get(mid, {})
+                    # Construir datos mínimos
+                    minimal = {
+                        "id": mid,
+                        "name": it.get("phone") or it.get("chat_id") or mid,
+                        "type": "individual",
+                        "timestamp": None,
+                        "unread_count": 0,
+                        "archived": False,
+                        "pinned": False,
+                    }
+                    try:
+                        chat_obj = ChatOverview(**minimal)
+                        chat_dict = chat_obj.dict()
+                        mongo_id = it.get("_id")
+                        if mongo_id:
+                            chat_dict["interaction_id"] = str(mongo_id)
+                        overview_chats.append(chat_dict)
+                    except Exception as e:
+                        logger.warning(
+                            f"Error agregando chat mínimo para {mid}: {e}"
+                        )
+
         # Guardar en cache
         cache.set(cache_key, overview_chats, ttl=300)
 
@@ -294,19 +388,12 @@ async def get_chats_overview(
     "/{interaction_id}",
     response_model=MessagesListResponse,
     summary="Get persisted chat messages by interaction",
-    description="""
-    Returns persisted messages from MongoDB for the chat associated with the given interaction.
-
-    Chat ID resolution:
-    - Try `interaction_id` as key.
-    - Fallback: load the interaction and use `chat_id` or `phone` as chat identifier.
-
-    Pagination: `limit` and `offset`. No caching to avoid stale data.
-    """,
+    description="Returns persisted messages from MongoDB for the chat associated with the given interaction.",
     responses={
         200: {"description": "Messages retrieved successfully"},
         404: {"description": "Chat not found"},
         500: {"description": "Internal server error"},
+        403: {"description": "Forbidden"},
     }
 )
 async def get_chat_by_id(
@@ -329,9 +416,27 @@ async def get_chat_by_id(
             f"Obteniendo mensajes por interaction_id: {interaction_id} (limit={limit}, offset={offset})"
         )
 
+        # Autorización: solo el asesor asignado puede acceder
+        if not interaction:
+            logger.warning(f"Interacción no encontrada: {interaction_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Interacción no encontrada",
+            )
+
+        assigned_asesor_id = (interaction or {}).get("asesor_id")
+        current_asesor_id = str(current_user.get("_id")) if current_user.get("_id") else None
+        if not assigned_asesor_id or assigned_asesor_id != current_asesor_id:
+            logger.warning(
+                f"Acceso denegado: asesor {current_asesor_id} no asignado a interacción {interaction_id}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: solo el asesor asignado puede acceder a esta interacción",
+            )
+
         # Resolver posibles claves de chat
         candidates = [interaction_id]
-        interaction = InteractionModel.find_by_id(interaction_id)
         if interaction:
             chat_id_ref = (interaction.get("chat_id") or "").strip()
             phone_ref = (interaction.get("phone") or "").strip()
@@ -818,6 +923,38 @@ async def send_message(
     try:
         logger.info(f"Enviando mensaje tipo '{message_request.type}' a chat: {chat_id}")
 
+        # Autorización: solo el asesor asignado puede enviar mensajes al chat/interacción
+        interaction = None
+        try:
+            if "@" in chat_id:
+                interaction = InteractionModel.find_by_phone(chat_id)
+                if not interaction:
+                    interaction = InteractionModel.find_by_chat_id(chat_id)
+            else:
+                interaction = InteractionModel.find_by_chat_id(chat_id)
+                if not interaction:
+                    interaction = InteractionModel.find_by_phone(chat_id)
+        except Exception:
+            interaction = None
+
+        if not interaction:
+            logger.warning(f"Acceso denegado: chat sin interacción asociada para '{chat_id}'")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: el chat no está asociado a una interacción asignada",
+            )
+
+        assigned_asesor_id = interaction.get("asesor_id")
+        current_asesor_id = str(current_user.get("_id")) if current_user.get("_id") else None
+        if not assigned_asesor_id or assigned_asesor_id != current_asesor_id:
+            logger.warning(
+                f"Acceso denegado: asesor {current_asesor_id} no asignado al chat/interacción ({chat_id})"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: solo el asesor asignado puede enviar mensajes a este chat",
+            )
+
         # Preparar datos del mensaje según el tipo
         message_data = {
             "text": message_request.message,
@@ -862,7 +999,6 @@ async def send_message(
 
         # Persistir mensaje en MongoDB (saliente)
         try:
-            interaction = InteractionModel.find_by_chat_id(chat_id)
             advisor_id = (
                 str(current_user.get("_id")) if current_user.get("_id") else None
             )

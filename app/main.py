@@ -6,7 +6,6 @@ from .api.v1.auth import router as auth_router
 from .api.v1.health import router as health_router
 from .api.v1.chats import router as chats_router
 from .api.v1.webhooks import router as webhooks_router
-from .api.v1.presence import router as presence_router
 from .database.connection import get_database, close_database_connection
 from .database.seeder import seed_database
 from .services.waha_client import close_waha_client
@@ -83,10 +82,15 @@ app.include_router(auth_router, prefix="/auth")
 app.include_router(health_router, prefix="/health")
 app.include_router(chats_router, prefix="/api/v1/chats")
 app.include_router(webhooks_router, prefix="/api/v1/webhooks")
-app.include_router(presence_router, prefix="/api/v1/presence")
 
 if __name__ == "__main__":
     import uvicorn
     from .api.envs import HOST, PORT
-
-    uvicorn.run("app.main:app", host=HOST, port=PORT, log_level="info")
+    uvicorn.run(
+        "app.main:app",
+        host=HOST,
+        port=PORT,
+        log_level="info",
+        server_header=False,
+        date_header=False,
+    )

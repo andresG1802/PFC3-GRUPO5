@@ -326,7 +326,5 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
 
     return TokenResponse(
         access_token=access_token,
-        token_type="bearer",
-        expires_in=JWT_EXPIRE_MINUTES * 60,
         asesor_id=str(current_user["_id"]),
     )
