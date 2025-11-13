@@ -2,3 +2,7 @@ venv
 .env
 .venv/
 model/
+**__pycache__/
+.benchmarks/
+benchmarks*
+.pytest_cache/

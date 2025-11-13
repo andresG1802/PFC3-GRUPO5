@@ -1,0 +1,117 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, dev ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: 3.11
+
+    - name: Install uv
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install uv
+
+    - name: Install dependencies
+      run: |
+        uv sync
+
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        uvx flake8 app/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        uvx flake8 app/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Format check with black
+      run: |
+        uvx black --check app/ tests/
+
+    - name: Import sorting check with isort
+      run: |
+        uvx isort --check-only app/ tests/
+
+    - name: Run unit tests
+      run: |
+        uv run pytest tests/ -v -m "not integration and not slow" --cov=app --cov-report=xml
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: 3.11
+
+    - name: Install uv
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install uv
+
+    - name: Run security checks with bandit
+      run: |
+        uvx bandit -r app/ -f json -o bandit-report.json || true
+
+    - name: Check dependencies for known vulnerabilities
+      run: |
+        uvx safety check --json --output safety-report.json || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v5.0.0
+      with:
+        name: security-reports
+        path: |
+          bandit-report.json
+          safety-report.json
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/aru-link-api:latest
+          ${{ secrets.DOCKER_USERNAME }}/aru-link-api:${{ github.ref_name }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  notify:
+    runs-on: ubuntu-latest
+    needs: [test, security, build]
+    if: always()
+
+    steps:
+    - name: Notify on success
+      if: needs.test.result == 'success' && needs.security.result == 'success'
+      run: |
+        echo "All checks passed successfully!"
+
+    - name: Notify on failure
+      if: needs.test.result == 'failure' || needs.security.result == 'failure'
+      run: |
+        echo "Some checks failed. Please review the logs."
