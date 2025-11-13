@@ -7,7 +7,6 @@ provides utilities to resolve chat identifiers from interactions.
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any, AsyncGenerator, Optional
-from pydantic import BaseModel
 import asyncio
 import json
 from datetime import datetime, timezone
@@ -416,6 +415,9 @@ async def get_chat_by_id(
         logger.info(
             f"Obteniendo mensajes por interaction_id: {interaction_id} (limit={limit}, offset={offset})"
         )
+
+        # Obtener la interacción desde la base de datos
+        interaction = InteractionModel.find_by_id(interaction_id)
 
         # Autorización: solo el asesor asignado puede acceder
         if not interaction:
