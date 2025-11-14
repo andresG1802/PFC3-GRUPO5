@@ -283,7 +283,9 @@ class WAHAClient(LoggerMixin):
                 # WAHA expects 'ids' as array of chatIds (e.g. 549xxxx@c.us)
                 payload["ids"] = ids
 
-            logger.debug(f"Obteniendo overview de chats (POST): {url} - Body: {payload}")
+            logger.debug(
+                f"Obteniendo overview de chats (POST): {url} - Body: {payload}"
+            )
 
             response = await self.client.post(url, json=payload)
             data = self._handle_response(response)
@@ -515,13 +517,22 @@ class WAHAClient(LoggerMixin):
             mt = (message_type or "text").lower()
 
             if mt == "text":
-                data = await self._send_text_fallback(chat_id, message, **kwargs)  # primary path
+                data = await self._send_text_fallback(
+                    chat_id, message, **kwargs
+                )  # primary path
             elif mt in ("image", "document", "audio"):
-                data = await self._send_file(chat_id, kwargs.get("media_url"), filename=kwargs.get("filename"), caption=kwargs.get("caption"))
+                data = await self._send_file(
+                    chat_id,
+                    kwargs.get("media_url"),
+                    filename=kwargs.get("filename"),
+                    caption=kwargs.get("caption"),
+                )
             elif mt == "voice":
                 data = await self._send_voice(chat_id, kwargs.get("media_url"))
             elif mt == "video":
-                data = await self._send_video(chat_id, kwargs.get("media_url"), caption=kwargs.get("caption"))
+                data = await self._send_video(
+                    chat_id, kwargs.get("media_url"), caption=kwargs.get("caption")
+                )
             else:
                 raise WAHAConnectionError(
                     f"Tipo de mensaje no soportado por WAHAClient: {message_type}"
@@ -606,7 +617,12 @@ class WAHAClient(LoggerMixin):
         return data
 
     async def _send_file(
-        self, chat_id: str, url_or_media: Optional[str], *, filename: Optional[str] = None, caption: Optional[str] = None
+        self,
+        chat_id: str,
+        url_or_media: Optional[str],
+        *,
+        filename: Optional[str] = None,
+        caption: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Send a file (image/document/audio) via /api/sendFile using URL.
@@ -638,7 +654,9 @@ class WAHAClient(LoggerMixin):
         )
         return data
 
-    async def _send_voice(self, chat_id: str, url_or_media: Optional[str]) -> Dict[str, Any]:
+    async def _send_voice(
+        self, chat_id: str, url_or_media: Optional[str]
+    ) -> Dict[str, Any]:
         """
         Send a voice note via /api/sendVoice using URL.
         """
@@ -665,7 +683,11 @@ class WAHAClient(LoggerMixin):
         return data
 
     async def _send_video(
-        self, chat_id: str, url_or_media: Optional[str], *, caption: Optional[str] = None
+        self,
+        chat_id: str,
+        url_or_media: Optional[str],
+        *,
+        caption: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Send a video via /api/sendVideo using URL.
@@ -697,6 +719,7 @@ class WAHAClient(LoggerMixin):
 
 # Instancia global del cliente (se inicializa cuando se necesite)
 _waha_client: Optional[WAHAClient] = None
+
 
 async def _quick_ping(base_url: str, session_name: str = "default") -> bool:
     """

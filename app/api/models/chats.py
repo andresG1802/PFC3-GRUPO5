@@ -164,6 +164,7 @@ class InteractionStatePatchRequest(BaseModel):
 
     If state is set to 'derived', an 'asesor_id' must be provided.
     """
+
     state: InteractionState
     asesor_id: Optional[str] = None
 

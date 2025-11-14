@@ -65,7 +65,9 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     payload = {
                         "type": "message",
                         "chat_id": chat_id,
-                        "interaction_id": (interaction.get("_id") if interaction else None),
+                        "interaction_id": (
+                            interaction.get("_id") if interaction else None
+                        ),
                         "message": {
                             "id": event_data.get("id"),
                             "body": event_data.get("body"),
@@ -78,7 +80,9 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     }
                     redis_client.publish(channel_name, json.dumps(payload))
                 except Exception as e:
-                    logger.warning(f"Failed to publish SSE event for chat {chat_id}: {e}")
+                    logger.warning(
+                        f"Failed to publish SSE event for chat {chat_id}: {e}"
+                    )
 
         elif event_type == "message.ack":
             # Update message state and publish ACK to stream
@@ -99,7 +103,9 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                         }
                         redis_client.publish(channel_name, json.dumps(payload))
                     except Exception as e:
-                        logger.warning(f"Failed to publish ACK SSE event for chat {chat_id}: {e}")
+                        logger.warning(
+                            f"Failed to publish ACK SSE event for chat {chat_id}: {e}"
+                        )
 
         elif event_type == "session.status":
             # Update WhatsApp session status in cache

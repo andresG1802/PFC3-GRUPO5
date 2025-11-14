@@ -41,9 +41,7 @@ def hash_password(password: str) -> str:
     """
     salt = os.urandom(SALT_BYTES)
     dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, PBKDF2_ITERATIONS)
-    return (
-        f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
-    )
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt.hex()}${dk.hex()}"
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
@@ -59,9 +57,7 @@ def verify_password(password: str, stored_hash: str) -> bool:
                 iterations = int(iter_str)
                 salt = bytes.fromhex(salt_hex)
                 expected = bytes.fromhex(hash_hex)
-                dk = hashlib.pbkdf2_hmac(
-                    "sha256", password.encode(), salt, iterations
-                )
+                dk = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations)
                 return hmac.compare_digest(dk, expected)
             except Exception:
                 return False
@@ -153,7 +149,9 @@ async def login(login_data: LoginRequest):
     """
     asesor = AsesorModel.find_by_email(login_data.email)
 
-    if not asesor or not verify_password(login_data.password, asesor.get("password", "")):
+    if not asesor or not verify_password(
+        login_data.password, asesor.get("password", "")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas",
@@ -291,7 +289,9 @@ async def change_password(
         HTTPException: Si la contraseña actual es incorrecta
     """
     # Verificar contraseña actual
-    if not verify_password(password_data.current_password, current_user.get("password", "")):
+    if not verify_password(
+        password_data.current_password, current_user.get("password", "")
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Contraseña actual incorrecta",
