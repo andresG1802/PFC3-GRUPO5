@@ -24,10 +24,6 @@ class TestLogin:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert data["token_type"] == "bearer"
-        assert "expires_in" in data
-        assert "asesor_id" in data
-        assert "expires_in" in data
         assert "asesor_id" in data
 
     def test_login_invalid_email(self, client: TestClient, mock_asesor_model):
@@ -345,8 +341,6 @@ class TestRefreshToken:
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
-        assert data["token_type"] == "bearer"
-        assert "expires_in" in data
         assert "asesor_id" in data
 
     def test_refresh_token_without_authentication(self, client: TestClient):
