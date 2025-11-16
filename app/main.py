@@ -10,6 +10,7 @@ from .database.connection import get_database, close_database_connection
 from .database.seeder import seed_database
 from .services.waha_client import close_waha_client
 from .utils.logging_config import init_logging
+from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL
 from .middleware import (
     ErrorHandlerMiddleware,
     TimeoutMiddleware,
@@ -37,6 +38,21 @@ async def lifespan(app: FastAPI):
         seed_database()
     except Exception as e:
         print(f"Error durante el seeding: {e}")
+
+    # Configure WAHA webhook to deliver incoming WhatsApp events to our backend
+    try:
+        from .services.waha_client import get_waha_client
+
+        waha_client = await get_waha_client()
+        webhook_url = WAHA_BACKEND_WEBHOOK_URL
+        await waha_client.configure_webhook(
+            webhook_url,
+            enabled=True,
+            events=["message", "message.ack"],
+        )
+        print(f"WAHA webhook configured: {webhook_url}")
+    except Exception as e:
+        print(f"WAHA webhook configuration skipped: {e}")
 
     yield
     # Shutdown

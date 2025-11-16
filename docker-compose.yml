@@ -68,7 +68,7 @@ services:
 
   waha:
     container_name: afapa-waha
-    image: devlikeapro/waha
+    image: devlikeapro/waha:latest-2025.11.2
     restart: unless-stopped
     ports:
       - "3000:8000"
@@ -79,6 +79,7 @@ services:
       WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-afapagod}
       WAHA_ENCRYPTION_KEY: ${WAHA_ENCRYPTION_KEY:-please-change-me}
       WAHA_API_KEY: ${WAHA_API_KEY:-please-change-me}
+      WAHA_PRINT_QR: false
     depends_on:
       db:
         condition: service_healthy

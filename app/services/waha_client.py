@@ -263,10 +263,11 @@ class WAHAClient(LoggerMixin):
         self, limit: int = 20, offset: int = 0, ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Get an optimized chats overview from WAHA using POST.
+        Get an optimized chats overview from WAHA using GET.
 
-        Uses `POST /api/{session}/chats/overview` so we can pass many
-        `ids` in the body when needed (per WAHA OpenAPI).
+        WAHA responde con overview en `GET /api/{session}/chats/overview`.
+        Si se proporcionan `ids`, intentaremos pasarlos como query param
+        (si no son soportados, aplicaremos filtrado local en el caller).
 
         Args:
             limit: Max chats to fetch
@@ -278,16 +279,16 @@ class WAHAClient(LoggerMixin):
         """
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
-            payload: Dict[str, Any] = {"limit": limit, "offset": offset}
+            params: Dict[str, Any] = {"limit": limit, "offset": offset}
             if ids:
-                # WAHA expects 'ids' as array of chatIds (e.g. 549xxxx@c.us)
-                payload["ids"] = ids
+                # En caso de soporte, pasar ids como query; algunos servidores aceptan ids repetidos
+                params["ids"] = ids
 
             logger.debug(
-                f"Obteniendo overview de chats (POST): {url} - Body: {payload}"
+                f"Obteniendo overview de chats (GET): {url} - Params: {params}"
             )
 
-            response = await self.client.post(url, json=payload)
+            response = await self.client.get(url, params=params)
             data = self._handle_response(response)
 
             # WAHA puede devolver directamente una lista o un objeto con lista
@@ -715,6 +716,67 @@ class WAHAClient(LoggerMixin):
             message_id=data.get("id"),
         )
         return data
+
+    @retry_on_failure(max_retries=3, delay=1.0)
+    async def configure_webhook(
+        self,
+        url: str,
+        enabled: bool = True,
+        events: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Configure WAHA session webhooks to send real-time events to the provided URL.
+
+        Args:
+            url: Publicly reachable URL from WAHA to our backend webhook endpoint.
+            enabled: Whether the webhook should be enabled.
+            events: Optional list of event names (e.g., ["message", "session.status", "presence.update"]).
+
+        Returns:
+            Dict with WAHA response payload.
+
+        Raises:
+            WAHATimeoutError: When WAHA does not respond within timeout.
+            WAHAConnectionError: When a connection or server error occurs.
+            WAHAAuthenticationError: When API Key is invalid.
+        """
+        try:
+            # Session-level webhooks per WAHA documentation
+            webhook_cfg: Dict[str, Any] = {"url": url}
+            if events:
+                webhook_cfg["events"] = events
+
+            session_payload: Dict[str, Any] = {
+                "name": self.session_name,
+                "config": {
+                    "webhooks": [webhook_cfg],
+                },
+            }
+
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=3.0),
+                headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
+            ) as client:
+                # Prefer PUT /api/sessions/{session} to update config
+                put_url = (
+                    f"{self.base_url.rstrip('/')}/api/sessions/{self.session_name}"
+                )
+                response = await client.put(put_url, json=session_payload)
+
+                # If PUT not supported, fallback to POST /api/sessions (create/update)
+                if response.status_code == 404:
+                    post_url = f"{self.base_url.rstrip('/')}/api/sessions"
+                    response = await client.post(post_url, json=session_payload)
+
+                data = self._handle_response(response)
+                logger.info(
+                    f"WAHA session webhooks configured for '{self.session_name}': {url}"
+                )
+                return data
+        except httpx.TimeoutException:
+            raise WAHATimeoutError("Timeout configuring WAHA webhook")
+        except httpx.HTTPError as e:
+            raise WAHAConnectionError(f"Failed configuring WAHA webhook: {str(e)}")
 
 
 # Instancia global del cliente (se inicializa cuando se necesite)

@@ -53,6 +53,11 @@ class Settings(BaseSettings):
         description="Clave API para WAHA",
     )
 
+    waha_backend_webhook_url: str = Field(
+        description="URL de webhook para WAHA",
+        default="http://backend:8000/api/v1/webhooks/waha",
+    )
+
     # Configuración adicional de la aplicación
     debug: bool = Field(default=False, description="Modo debug de la aplicación")
 
@@ -123,6 +128,8 @@ N8N_ENCRYPTION_KEY = settings.n8n_encryption_key
 
 WAHA_ENCRYPTION_KEY = settings.waha_encryption_key
 WAHA_API_KEY = settings.waha_api_key
+WAHA_BACKEND_WEBHOOK_URL = settings.waha_backend_webhook_url
+
 
 DEBUG = settings.debug
 HOST = settings.host

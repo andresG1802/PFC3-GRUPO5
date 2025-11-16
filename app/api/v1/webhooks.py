@@ -10,8 +10,6 @@ from ...database.models import ChatModel, InteractionModel
 from ...services.cache import get_cache
 from ..models.webhooks import (
     MessageEvent,
-    SessionStatusEvent,
-    PresenceUpdateEvent,
     WebhookResponse,
 )
 
@@ -20,6 +18,21 @@ logger = get_logger(__name__)
 
 # Crear router
 router = APIRouter(tags=["Webhooks"])
+
+
+def _map_waha_message_type(raw_type: str | None) -> str:
+    """Mapea el tipo de WAHA al tipo interno.
+
+    WAHA usa valores como `chat` (texto) y `ptt` (nota de voz).
+    Nuestro modelo espera `text`, `voice`, etc.
+    """
+    if not raw_type:
+        return "text"
+    mapping = {
+        "chat": "text",
+        "ptt": "voice",
+    }
+    return mapping.get(raw_type, raw_type)
 
 
 async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> None:
@@ -31,72 +44,88 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
         redis_client = cache.redis_client
 
         if event_type == "message":
-            # Invalidate caches for the affected chat
             chat_id = event_data.get("from")
             if chat_id:
-                cache.delete_pattern(f"messages:{chat_id}:*")
-                cache.delete_pattern(f"chat:{chat_id}")
-                logger.info(f"Cache invalidated for chat: {chat_id}")
-
-                # Persist incoming message in MongoDB
                 interaction = None
+                is_derived = False
                 try:
+                    # Primero intentar por chat_id
                     interaction = InteractionModel.find_by_chat_id(chat_id)
-                    ChatModel.add_message(
-                        chat_id,
-                        {
-                            "id": event_data.get("id"),
-                            "body": event_data.get("body"),
-                            "timestamp": event_data.get("timestamp", 0),
-                            "type": event_data.get("type", "text"),
-                            "from_me": bool(event_data.get("fromMe", False)),
-                            "ack": event_data.get("ack"),
-                            "from": event_data.get("from"),
-                        },
-                        interaction_id=interaction.get("_id") if interaction else None,
+                    is_derived = (
+                        interaction is not None
+                        and str(interaction.get("state", "")).lower() == "derived"
                     )
-                except Exception as e:
-                    logger.warning(f"Failed to persist incoming message: {e}")
+                    # Fallback: intentar por phone usando el mismo chat_id almacenado en interactions
+                    if not is_derived:
+                        interaction_by_phone = InteractionModel.find_by_phone(chat_id)
+                        if (
+                            interaction_by_phone is not None
+                            and str(interaction_by_phone.get("state", "")).lower()
+                            == "derived"
+                        ):
+                            interaction = interaction_by_phone
+                            is_derived = True
+                except Exception:
+                    interaction = None
+                    is_derived = False
 
-                # Publish real-time event to Redis channel for SSE subscribers
-                try:
-                    channel_name = f"{cache.key_prefix}stream:{chat_id}"
-                    payload = {
-                        "type": "message",
-                        "chat_id": chat_id,
-                        "interaction_id": (
-                            interaction.get("_id") if interaction else None
-                        ),
-                        "message": {
-                            "id": event_data.get("id"),
-                            "body": event_data.get("body"),
-                            "timestamp": event_data.get("timestamp", 0),
-                            "type": event_data.get("type", "text"),
-                            "from_me": bool(event_data.get("fromMe", False)),
-                            "from": event_data.get("from"),
-                        },
-                    }
-                    redis_client.publish(channel_name, json.dumps(payload))
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to publish SSE event for chat {chat_id}: {e}"
+                # Solo invalidar cache y persistir/publicar si hay interacción DERIVED
+                if is_derived:
+                    try:
+                        cache.delete_pattern(f"messages:{chat_id}:*")
+                        cache.delete_pattern(f"chat:{chat_id}")
+                        logger.info(f"Cache invalidated for chat: {chat_id}")
+                    except Exception:
+                        pass
+
+                    # Persistir mensaje entrante en MongoDB (esto crea el chat si no existe)
+                    try:
+                        ChatModel.add_message(
+                            chat_id,
+                            {
+                                "id": event_data.get("id"),
+                                "body": event_data.get("body"),
+                                "timestamp": event_data.get("timestamp", 0),
+                                "type": event_data.get("type", "text"),
+                                "from_me": bool(event_data.get("fromMe", False)),
+                                "ack": event_data.get("ack"),
+                                "from": event_data.get("from"),
+                            },
+                            interaction_id=(
+                                interaction.get("_id") if interaction else None
+                            ),
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to persist incoming message: {e}")
+
+                    # Publicar evento en tiempo real para suscriptores SSE
+                    try:
+                        channel_name = f"{cache.key_prefix}stream:{chat_id}"
+                        payload = {
+                            "type": "message",
+                            "chat_id": chat_id,
+                            "interaction_id": (
+                                interaction.get("_id") if interaction else None
+                            ),
+                            "message": {
+                                "id": event_data.get("id"),
+                                "body": event_data.get("body"),
+                                "timestamp": event_data.get("timestamp", 0),
+                                "type": event_data.get("type", "text"),
+                                "from_me": bool(event_data.get("fromMe", False)),
+                                "from": event_data.get("from"),
+                            },
+                        }
+                        redis_client.publish(channel_name, json.dumps(payload))
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to publish SSE event for chat {chat_id}: {e}"
+                        )
+                else:
+                    # No derived → no persistimos ni publicamos, para evitar generar chats no deseados
+                    logger.info(
+                        f"Mensaje ignorado para chat {chat_id} por no existir interacción en estado 'derived'"
                     )
-
-        elif event_type == "session.status":
-            # Update WhatsApp session status in cache
-            session = event_data.get("session")
-            status_value = event_data.get("status")
-            if session:
-                cache.set(f"session:{session}:status", status_value, ttl=3600)
-                logger.info(f"Session status updated: {session} -> {status_value}")
-
-        elif event_type == "presence.update":
-            # Update contact presence in cache
-            contact_id = event_data.get("id")
-            presence = event_data.get("presence")
-            if contact_id:
-                cache.set(f"presence:{contact_id}", presence, ttl=300)
-                logger.info(f"Presence updated: {contact_id} -> {presence}")
 
         # Store event for potential later inspection
         event_key = f"webhook_event:{datetime.now().isoformat()}"
@@ -116,9 +145,7 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
     
     **Eventos soportados:**
     - `message`: Nuevo mensaje recibido
-    - `message.ack`: Confirmación de mensaje enviado
-    - `session.status`: Cambio de estado de sesión
-    - `presence.update`: Actualización de presencia de contacto
+    - `message.ack`: Confirmación de mensaje enviado (ignorado por ahora)
     
     **Uso:** Este endpoint debe configurarse en WAHA como webhook URL.
     """,
@@ -174,45 +201,49 @@ async def receive_waha_webhook(
                 detail="Campo 'event' requerido",
             )
 
+        # Extraer payload (WAHA envía `payload`; también aceptamos `data` por compatibilidad)
+        payload = webhook_data.get("payload") or webhook_data.get("data", {})
+
         # Validar y procesar según el tipo de evento
-        event_data = webhook_data.get("data", {})
+        event_data: Dict[str, Any] = {}
 
         if event_type == "message":
             try:
-                message_event = MessageEvent(**event_data)
+                # Normalizar campos al esquema esperado por MessageEvent
+                raw_type = (payload.get("_data") or {}).get("type")
+                normalized: Dict[str, Any] = {
+                    "id": payload.get("id"),
+                    "timestamp": payload.get("timestamp"),
+                    "from": payload.get("from"),
+                    "to": payload.get("to"),
+                    "body": payload.get("body"),
+                    # WAHA usa camelCase; nuestro modelo acepta alias fromMe
+                    "fromMe": payload.get("fromMe"),
+                    # Preferimos ackName (STRING) sobre ack (NUMBER)
+                    "ack": payload.get("ackName") or payload.get("ack"),
+                    "type": _map_waha_message_type(raw_type),
+                }
+
+                message_event = MessageEvent(**normalized)
+                event_data = normalized
                 logger.info(
                     f"Mensaje recibido de {message_event.from_user}: {message_event.body[:50]}..."
                 )
             except Exception as e:
-                logger.warning(f"Error validando evento de mensaje: {e}")
+                logger.warning(
+                    f"Error validando evento de mensaje: {e}. Payload recibido: {payload}"
+                )
 
         elif event_type == "message.ack":
             # ACK events are ignored intentionally
             logger.info("ACK event received and ignored as per current configuration")
 
-        elif event_type == "session.status":
-            try:
-                session_event = SessionStatusEvent(**event_data)
-                logger.info(
-                    f"Estado de sesión {session_event.session}: {session_event.status}"
-                )
-            except Exception as e:
-                logger.warning(f"Error validando evento de sesión: {e}")
-
-        elif event_type == "presence.update":
-            try:
-                presence_event = PresenceUpdateEvent(**event_data)
-                logger.info(
-                    f"Presencia actualizada {presence_event.id}: {presence_event.presence}"
-                )
-            except Exception as e:
-                logger.warning(f"Error validando evento de presencia: {e}")
-
         else:
             logger.info(f"Tipo de evento no reconocido: {event_type}")
 
-        # Procesar evento en segundo plano
-        background_tasks.add_task(process_webhook_event, event_type, event_data)
+        # Procesar evento en segundo plano solo para 'message'
+        if event_type == "message":
+            background_tasks.add_task(process_webhook_event, event_type, event_data)
 
         return WebhookResponse(
             status="success",
