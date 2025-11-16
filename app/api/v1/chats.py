@@ -662,12 +662,16 @@ async def stream_chat_by_interaction(
                             try:
                                 payload_obj = json.loads(data)
                                 if isinstance(payload_obj, dict):
-                                    event_type = str(payload_obj.get("type") or "message")
+                                    event_type = str(
+                                        payload_obj.get("type") or "message"
+                                    )
                             except Exception:
                                 payload_obj = None
                         # Build final JSON string
                         final_payload = (
-                            json.dumps(payload_obj) if payload_obj is not None else (data if isinstance(data, str) else json.dumps(data))
+                            json.dumps(payload_obj)
+                            if payload_obj is not None
+                            else (data if isinstance(data, str) else json.dumps(data))
                         )
                         # Send SSE with explicit event type for UI-friendly filtering
                         yield f"event: {event_type}\n".encode("utf-8")
