@@ -68,7 +68,7 @@ services:
 
   waha:
     container_name: afapa-waha
-    image: devlikeapro/waha
+    image: devlikeapro/waha:latest-2025.11.2
     restart: unless-stopped
     ports:
       - "3000:8000"
