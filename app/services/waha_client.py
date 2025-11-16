@@ -716,6 +716,63 @@ class WAHAClient(LoggerMixin):
         )
         return data
 
+    @retry_on_failure(max_retries=3, delay=1.0)
+    async def configure_webhook(
+        self,
+        url: str,
+        enabled: bool = True,
+        events: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Configure WAHA session webhooks to send real-time events to the provided URL.
+
+        Args:
+            url: Publicly reachable URL from WAHA to our backend webhook endpoint.
+            enabled: Whether the webhook should be enabled.
+            events: Optional list of event names (e.g., ["message", "session.status", "presence.update"]).
+
+        Returns:
+            Dict with WAHA response payload.
+
+        Raises:
+            WAHATimeoutError: When WAHA does not respond within timeout.
+            WAHAConnectionError: When a connection or server error occurs.
+            WAHAAuthenticationError: When API Key is invalid.
+        """
+        try:
+            # Session-level webhooks per WAHA documentation
+            webhook_cfg: Dict[str, Any] = {"url": url}
+            if events:
+                webhook_cfg["events"] = events
+
+            session_payload: Dict[str, Any] = {
+                "name": self.session_name,
+                "config": {
+                    "webhooks": [webhook_cfg],
+                },
+            }
+
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=3.0),
+                headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
+            ) as client:
+                # Prefer PUT /api/sessions/{session} to update config
+                put_url = f"{self.base_url.rstrip('/')}/api/sessions/{self.session_name}"
+                response = await client.put(put_url, json=session_payload)
+
+                # If PUT not supported, fallback to POST /api/sessions (create/update)
+                if response.status_code == 404:
+                    post_url = f"{self.base_url.rstrip('/')}/api/sessions"
+                    response = await client.post(post_url, json=session_payload)
+
+                data = self._handle_response(response)
+                logger.info(f"WAHA session webhooks configured for '{self.session_name}': {url}")
+                return data
+        except httpx.TimeoutException:
+            raise WAHATimeoutError("Timeout configuring WAHA webhook")
+        except httpx.HTTPError as e:
+            raise WAHAConnectionError(f"Failed configuring WAHA webhook: {str(e)}")
+
 
 # Instancia global del cliente (se inicializa cuando se necesite)
 _waha_client: Optional[WAHAClient] = None

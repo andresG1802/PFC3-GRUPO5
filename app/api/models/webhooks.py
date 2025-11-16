@@ -47,7 +47,7 @@ class MessageEvent(BaseModel):
     body: Optional[str] = Field(None, description="Contenido del mensaje")
     type: MessageType = Field(..., description="Tipo de mensaje")
     ack: Optional[MessageAck] = Field(None, description="Estado de confirmación")
-    from_me: bool = Field(..., description="Mensaje enviado por mí")
+    from_me: bool = Field(..., alias="fromMe", description="Mensaje enviado por mí")
 
     # Campos opcionales para diferentes tipos de mensaje
     caption: Optional[str] = Field(None, description="Descripción de media")

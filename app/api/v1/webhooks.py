@@ -22,6 +22,21 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["Webhooks"])
 
 
+def _map_waha_message_type(raw_type: str | None) -> str:
+    """Mapea el tipo de WAHA al tipo interno.
+
+    WAHA usa valores como `chat` (texto) y `ptt` (nota de voz).
+    Nuestro modelo espera `text`, `voice`, etc.
+    """
+    if not raw_type:
+        return "text"
+    mapping = {
+        "chat": "text",
+        "ptt": "voice",
+    }
+    return mapping.get(raw_type, raw_type)
+
+
 async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> None:
     """
     Process webhook events in background.
@@ -174,17 +189,38 @@ async def receive_waha_webhook(
                 detail="Campo 'event' requerido",
             )
 
+        # Extraer payload (WAHA envía `payload`; también aceptamos `data` por compatibilidad)
+        payload = webhook_data.get("payload") or webhook_data.get("data", {})
+
         # Validar y procesar según el tipo de evento
-        event_data = webhook_data.get("data", {})
+        event_data: Dict[str, Any] = {}
 
         if event_type == "message":
             try:
-                message_event = MessageEvent(**event_data)
+                # Normalizar campos al esquema esperado por MessageEvent
+                raw_type = (payload.get("_data") or {}).get("type")
+                normalized: Dict[str, Any] = {
+                    "id": payload.get("id"),
+                    "timestamp": payload.get("timestamp"),
+                    "from": payload.get("from"),
+                    "to": payload.get("to"),
+                    "body": payload.get("body"),
+                    # WAHA usa camelCase; nuestro modelo acepta alias fromMe
+                    "fromMe": payload.get("fromMe"),
+                    # Preferimos ackName (STRING) sobre ack (NUMBER)
+                    "ack": payload.get("ackName") or payload.get("ack"),
+                    "type": _map_waha_message_type(raw_type),
+                }
+
+                message_event = MessageEvent(**normalized)
+                event_data = normalized
                 logger.info(
                     f"Mensaje recibido de {message_event.from_user}: {message_event.body[:50]}..."
                 )
             except Exception as e:
-                logger.warning(f"Error validando evento de mensaje: {e}")
+                logger.warning(
+                    f"Error validando evento de mensaje: {e}. Payload recibido: {payload}"
+                )
 
         elif event_type == "message.ack":
             # ACK events are ignored intentionally
@@ -192,6 +228,13 @@ async def receive_waha_webhook(
 
         elif event_type == "session.status":
             try:
+                # Normalizar campos de evento de sesión
+                event_data = {
+                    "session": webhook_data.get("session") or payload.get("session"),
+                    "status": payload.get("status") or webhook_data.get("status"),
+                    "timestamp": payload.get("timestamp") or webhook_data.get("timestamp"),
+                    "qr": payload.get("qr"),
+                }
                 session_event = SessionStatusEvent(**event_data)
                 logger.info(
                     f"Estado de sesión {session_event.session}: {session_event.status}"
@@ -201,6 +244,8 @@ async def receive_waha_webhook(
 
         elif event_type == "presence.update":
             try:
+                # Para presencia, usamos directamente el payload normalizado
+                event_data = payload or {}
                 presence_event = PresenceUpdateEvent(**event_data)
                 logger.info(
                     f"Presencia actualizada {presence_event.id}: {presence_event.presence}"
