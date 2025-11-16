@@ -396,6 +396,7 @@ class TestRateLimiting:
         """Test excediendo límite de solicitudes por minuto en /auth/register"""
         # Verificar si Redis está disponible y rate limiting habilitado
         from app.config.security import rate_limit_config
+
         if not rate_limit_config.enabled:
             pytest.skip(
                 "Rate limiting deshabilitado; se omite el test de rate limiting."
@@ -419,13 +420,9 @@ class TestRateLimiting:
 
             # Usar asyncio.run para evitar DeprecationWarning de get_event_loop
             if not asyncio.run(_ping()):
-                pytest.skip(
-                    "Redis no disponible; se omite el test de rate limiting."
-                )
+                pytest.skip("Redis no disponible; se omite el test de rate limiting.")
         except Exception:
-            pytest.skip(
-                "Entorno sin redis.asyncio; se omite el test de rate limiting."
-            )
+            pytest.skip("Entorno sin redis.asyncio; se omite el test de rate limiting.")
 
         # Enviar suficientes solicitudes para exceder el límite
         # Nota: /auth/register requiere autenticación, y el middleware aplica

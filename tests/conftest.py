@@ -20,13 +20,13 @@ load_dotenv(test_env_path, override=True)
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Mock de servicios externos antes de importar la app
-with patch("redis.Redis") as mock_redis, patch(
-    "pymongo.MongoClient"
-) as mock_mongo, patch("app.services.cache.get_cache") as mock_get_cache, patch(
-    "app.services.waha_client.get_waha_client"
-) as mock_get_waha, patch(
-    "app.database.models.AsesorModel"
-) as mock_asesor_model:
+with (
+    patch("redis.Redis") as mock_redis,
+    patch("pymongo.MongoClient") as mock_mongo,
+    patch("app.services.cache.get_cache") as mock_get_cache,
+    patch("app.services.waha_client.get_waha_client") as mock_get_waha,
+    patch("app.database.models.AsesorModel") as mock_asesor_model,
+):
 
     # Mock del cache Redis
     mock_cache_instance = MagicMock()

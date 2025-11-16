@@ -5,6 +5,7 @@ Modelos Pydantic para el router de Chats
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, List, Any, Dict
 from enum import Enum
+from .interactions import InteractionState
 
 
 class ChatType(str, Enum):
@@ -163,6 +164,7 @@ class InteractionStatePatchRequest(BaseModel):
 
     If state is set to 'derived', an 'asesor_id' must be provided.
     """
+
     state: InteractionState
     asesor_id: Optional[str] = None
 

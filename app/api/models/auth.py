@@ -51,9 +51,7 @@ class RegisterAsesorRequest(BaseModel):
         if len(v) < 8:
             raise ValueError("La contraseña debe tener al menos 8 caracteres")
         if not any(not c.isalnum() for c in v):
-            raise ValueError(
-                "La contraseña debe incluir al menos un carácter especial"
-            )
+            raise ValueError("La contraseña debe incluir al menos un carácter especial")
         return v
 
 

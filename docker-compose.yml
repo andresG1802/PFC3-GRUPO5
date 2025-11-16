@@ -4,7 +4,7 @@ services:
     image: mongo:8.0-noble
     restart: unless-stopped
     ports:
-      - 27017
+      - "27018:27017"
     volumes:
       - db_data:/data/db
     env_file:
@@ -75,6 +75,8 @@ services:
     env_file:
       - .env
     environment:
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME:-afapa}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD:-afapagod}
       WAHA_ENCRYPTION_KEY: ${WAHA_ENCRYPTION_KEY:-please-change-me}
       WAHA_API_KEY: ${WAHA_API_KEY:-please-change-me}
     depends_on:

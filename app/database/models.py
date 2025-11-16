@@ -266,6 +266,27 @@ class InteractionModel:
         return results
 
     @staticmethod
+    def count_by_asesor(asesor_id: str, state: Optional[str] = None) -> int:
+        """
+        Cuenta cuántas interactions están asignadas a un asesor.
+
+        Args:
+            asesor_id: ID del asesor
+            state: Estado opcional para filtrar (e.g., 'derived')
+
+        Returns:
+            int: Número de interactions del asesor
+        """
+        collection = get_interactions_collection()
+        query: Dict[str, Any] = {"asesor_id": asesor_id}
+        if state:
+            query["state"] = state
+        try:
+            return collection.count_documents(query)
+        except Exception:
+            return 0
+
+    @staticmethod
     def delete_by_phone(phone: str) -> bool:
         """
         Elimina una interaction por número de teléfono

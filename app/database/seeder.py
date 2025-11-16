@@ -101,9 +101,6 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
         # No crear interactions de prueba en producción
         return []
 
-    # Obtener timestamp base para el timeline
-    base_time = datetime.now(timezone.utc)
-
     interactions_data = [
         {
             "chat_id": "chat_001",
@@ -122,7 +119,7 @@ def create_test_interactions(asesor_ids: List[str]) -> List[str]:
         },
         {
             "chat_id": "chat_002",
-            "phone": "51948604478@c.us",
+            "phone": "51902780049@c.us",
             "state": "pending",
             "route": "route_2",
             "step": 3,

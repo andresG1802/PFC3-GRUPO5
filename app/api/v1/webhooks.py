@@ -10,7 +10,6 @@ from ...database.models import ChatModel, InteractionModel
 from ...services.cache import get_cache
 from ..models.webhooks import (
     MessageEvent,
-    MessageAckEvent,
     SessionStatusEvent,
     PresenceUpdateEvent,
     WebhookResponse,
@@ -65,41 +64,23 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     payload = {
                         "type": "message",
                         "chat_id": chat_id,
-                        "interaction_id": (interaction.get("_id") if interaction else None),
+                        "interaction_id": (
+                            interaction.get("_id") if interaction else None
+                        ),
                         "message": {
                             "id": event_data.get("id"),
                             "body": event_data.get("body"),
                             "timestamp": event_data.get("timestamp", 0),
                             "type": event_data.get("type", "text"),
                             "from_me": bool(event_data.get("fromMe", False)),
-                            "ack": event_data.get("ack"),
                             "from": event_data.get("from"),
                         },
                     }
                     redis_client.publish(channel_name, json.dumps(payload))
                 except Exception as e:
-                    logger.warning(f"Failed to publish SSE event for chat {chat_id}: {e}")
-
-        elif event_type == "message.ack":
-            # Update message state and publish ACK to stream
-            message_id = event_data.get("id")
-            chat_id = event_data.get("from")
-            if message_id:
-                cache.delete_pattern(f"message:{message_id}")
-                logger.info(f"Message cache updated: {message_id}")
-                if chat_id:
-                    try:
-                        channel_name = f"{cache.key_prefix}stream:{chat_id}"
-                        payload = {
-                            "type": "message.ack",
-                            "chat_id": chat_id,
-                            "message_id": message_id,
-                            "ack": event_data.get("ack"),
-                            "timestamp": event_data.get("timestamp", 0),
-                        }
-                        redis_client.publish(channel_name, json.dumps(payload))
-                    except Exception as e:
-                        logger.warning(f"Failed to publish ACK SSE event for chat {chat_id}: {e}")
+                    logger.warning(
+                        f"Failed to publish SSE event for chat {chat_id}: {e}"
+                    )
 
         elif event_type == "session.status":
             # Update WhatsApp session status in cache
@@ -206,13 +187,8 @@ async def receive_waha_webhook(
                 logger.warning(f"Error validando evento de mensaje: {e}")
 
         elif event_type == "message.ack":
-            try:
-                ack_event = MessageAckEvent(**event_data)
-                logger.info(
-                    f"ACK recibido para mensaje {ack_event.id}: {ack_event.ack}"
-                )
-            except Exception as e:
-                logger.warning(f"Error validando evento ACK: {e}")
+            # ACK events are ignored intentionally
+            logger.info("ACK event received and ignored as per current configuration")
 
         elif event_type == "session.status":
             try:

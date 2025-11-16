@@ -7,7 +7,6 @@ provides utilities to resolve chat identifiers from interactions.
 from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
 from fastapi.responses import StreamingResponse
 from typing import Dict, Any, AsyncGenerator, Optional
-from pydantic import BaseModel
 import asyncio
 import json
 from datetime import datetime, timezone
@@ -47,6 +46,10 @@ logger = get_logger(__name__)
 # Crear router
 router = APIRouter(tags=["Chats"])
 
+# Límites por defecto
+# Límite máximo de interacciones en estado 'derived' que puede tener un asesor
+MAX_DERIVED_INTERACTIONS_PER_ADVISOR = 20
+
 
 async def get_waha_dependency() -> WAHAClient:
     """Dependencia para obtener cliente WAHA"""
@@ -81,7 +84,7 @@ async def get_waha_dependency() -> WAHAClient:
                 }
             },
         }
-    }
+    },
 )
 async def clear_chat_cache(
     current_admin: dict = Depends(get_current_admin),
@@ -145,7 +148,7 @@ async def clear_chat_cache(
             "description": "Timeout en comunicación con WAHA",
             "model": ErrorResponse,
         },
-    }
+    },
 )
 async def get_chats_overview(
     limit: int = Query(default=20, ge=1, le=100),
@@ -353,9 +356,13 @@ async def get_chats_overview(
                             chat_dict["interaction_id"] = str(mongo_id)
                         overview_chats.append(chat_dict)
                     except Exception as e:
-                        logger.warning(
-                            f"Error agregando chat mínimo para {mid}: {e}"
-                        )
+                        logger.warning(f"Error agregando chat mínimo para {mid}: {e}")
+
+        # Aplicar paginación hardcodeada por si el backend de WAHA no respeta límites
+        try:
+            overview_chats = overview_chats[offset : offset + limit]
+        except Exception:
+            pass
 
         # Guardar en cache
         cache.set(cache_key, overview_chats, ttl=300)
@@ -395,7 +402,7 @@ async def get_chats_overview(
         404: {"description": "Chat not found"},
         500: {"description": "Internal server error"},
         403: {"description": "Forbidden"},
-    }
+    },
 )
 async def get_chat_by_id(
     interaction_id: str = Path(
@@ -417,6 +424,9 @@ async def get_chat_by_id(
             f"Obteniendo mensajes por interaction_id: {interaction_id} (limit={limit}, offset={offset})"
         )
 
+        # Obtener la interacción desde la base de datos
+        interaction = InteractionModel.find_by_id(interaction_id)
+
         # Autorización: solo el asesor asignado puede acceder
         if not interaction:
             logger.warning(f"Interacción no encontrada: {interaction_id}")
@@ -426,7 +436,9 @@ async def get_chat_by_id(
             )
 
         assigned_asesor_id = (interaction or {}).get("asesor_id")
-        current_asesor_id = str(current_user.get("_id")) if current_user.get("_id") else None
+        current_asesor_id = (
+            str(current_user.get("_id")) if current_user.get("_id") else None
+        )
         if not assigned_asesor_id or assigned_asesor_id != current_asesor_id:
             logger.warning(
                 f"Acceso denegado: asesor {current_asesor_id} no asignado a interacción {interaction_id}"
@@ -575,7 +587,9 @@ async def stream_chat_by_interaction(
         max_length=24,
         pattern=r"^[a-fA-F0-9]{24}$",
     ),
-    heartbeat_interval: int = Query(15, ge=5, le=120, description="Heartbeat interval in seconds"),
+    heartbeat_interval: int = Query(
+        15, ge=5, le=120, description="Heartbeat interval in seconds"
+    ),
     current_user: dict = Depends(get_current_user),
 ) -> StreamingResponse:
     """SSE stream for messages of the chat linked to an interaction.
@@ -601,38 +615,34 @@ async def stream_chat_by_interaction(
                 detail="No autorizado: asesor no asignado a la interacción",
             )
 
-        # Resolve chat channel candidates (after authorization)
-        candidates = [interaction_id]
+        # Resolve channel ID candidates (post-authorization)
         chat_id_ref = (interaction.get("chat_id") or "").strip()
-        phone_ref = (interaction.get("phone") or "").strip()
+        phone_raw = (interaction.get("phone") or "").strip()
+        # Normalize phone to WAHA chatId format if missing domain
+        phone_ref = (
+            phone_raw if ("@" in phone_raw or not phone_raw) else f"{phone_raw}@c.us"
+        )
+
+        # Subscribe to all plausible IDs to avoid mismatches (phone vs chat_id)
+        channel_ids = set()
+        # Include interaction_id defensively, although webhooks publish by chat_id
+        channel_ids.add(interaction_id)
         if chat_id_ref:
-            candidates.append(chat_id_ref)
+            channel_ids.add(chat_id_ref)
         if phone_ref:
-            candidates.append(phone_ref)
+            channel_ids.add(phone_ref)
 
-        # Pick the first candidate with an existing chat document
-        channel_id: Optional[str] = None
-        for candidate in candidates:
-            if ChatModel.get_chat(candidate):
-                channel_id = candidate
-                break
-
-        # If no existing chat, but interaction pending, use inferred phone as channel
-        if channel_id is None and interaction and interaction.get("state") == InteractionState.PENDING.value:
-            inferred_chat_id = (interaction.get("phone") or "").strip()
-            channel_id = inferred_chat_id if inferred_chat_id else None
-
-        if not channel_id:
+        if not channel_ids:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Chat no encontrado para streaming",
+                detail="Chat not found for streaming",
             )
 
         cache = get_cache()
         redis_client = cache.redis_client
         pubsub = redis_client.pubsub(ignore_subscribe_messages=True)
-        channel_name = f"{cache.key_prefix}stream:{channel_id}"
-        pubsub.subscribe(channel_name)
+        channel_names = [f"{cache.key_prefix}stream:{cid}" for cid in channel_ids]
+        pubsub.subscribe(*channel_names)
 
         async def event_generator() -> AsyncGenerator[bytes, None]:
             """Yield SSE frames from Redis pub/sub and periodic heartbeats."""
@@ -645,8 +655,27 @@ async def stream_chat_by_interaction(
                         # Ensure bytes -> str
                         if isinstance(data, bytes):
                             data = data.decode("utf-8", errors="ignore")
-                        payload = data if isinstance(data, str) else json.dumps(data)
-                        yield f"data: {payload}\n\n".encode("utf-8")
+                        # Try to parse JSON payload to extract event type, fallback to raw
+                        event_type = "message"
+                        payload_obj = None
+                        if isinstance(data, str):
+                            try:
+                                payload_obj = json.loads(data)
+                                if isinstance(payload_obj, dict):
+                                    event_type = str(
+                                        payload_obj.get("type") or "message"
+                                    )
+                            except Exception:
+                                payload_obj = None
+                        # Build final JSON string
+                        final_payload = (
+                            json.dumps(payload_obj)
+                            if payload_obj is not None
+                            else (data if isinstance(data, str) else json.dumps(data))
+                        )
+                        # Send SSE with explicit event type for UI-friendly filtering
+                        yield f"event: {event_type}\n".encode("utf-8")
+                        yield f"data: {final_payload}\n\n".encode("utf-8")
 
                     # Heartbeat
                     now = asyncio.get_event_loop().time()
@@ -660,7 +689,10 @@ async def stream_chat_by_interaction(
                 pass
             finally:
                 try:
-                    pubsub.unsubscribe(channel_name)
+                    try:
+                        pubsub.unsubscribe(*channel_names)
+                    except Exception:
+                        pass
                     pubsub.close()
                 except Exception:
                     pass
@@ -677,7 +709,9 @@ async def stream_chat_by_interaction(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error starting SSE stream for interaction {interaction_id}: {e}")
+        logger.error(
+            f"Unexpected error starting SSE stream for interaction {interaction_id}: {e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
@@ -699,8 +733,12 @@ async def stream_chat_by_interaction(
     },
 )
 async def stream_assigned_interactions(
-    state: InteractionState = Query(InteractionState.DERIVED, description="Estado a filtrar"),
-    heartbeat_interval: int = Query(15, ge=5, le=120, description="Intervalo de heartbeat en segundos"),
+    state: InteractionState = Query(
+        InteractionState.DERIVED, description="Estado a filtrar"
+    ),
+    heartbeat_interval: int = Query(
+        15, ge=5, le=120, description="Intervalo de heartbeat en segundos"
+    ),
     current_user: dict = Depends(get_current_user),
 ) -> StreamingResponse:
     try:
@@ -750,7 +788,9 @@ async def stream_assigned_interactions(
                         if isinstance(data, bytes):
                             data = data.decode("utf-8", errors="ignore")
                         try:
-                            payload = json.loads(data) if isinstance(data, str) else data
+                            payload = (
+                                json.loads(data) if isinstance(data, str) else data
+                            )
                         except Exception:
                             payload = {"raw": data}
 
@@ -760,7 +800,9 @@ async def stream_assigned_interactions(
                             "chat_id": payload.get("chat_id"),
                             "from": (payload.get("message") or {}).get("from"),
                             "body": (payload.get("message") or {}).get("body"),
-                            "timestamp": (payload.get("message") or {}).get("timestamp", 0),
+                            "timestamp": (payload.get("message") or {}).get(
+                                "timestamp", 0
+                            ),
                         }
                         yield f"data: {json.dumps(notification)}\n\n".encode("utf-8")
 
@@ -790,7 +832,9 @@ async def stream_assigned_interactions(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error iniciando SSE agregado para asesor {current_user.get('_id')}: {e}")
+        logger.error(
+            f"Error iniciando SSE agregado para asesor {current_user.get('_id')}: {e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
@@ -849,6 +893,18 @@ async def update_interaction_state(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Advisor not found",
                 )
+            # Enforce max interactions per advisor in 'derived' state
+            try:
+                current_count = InteractionModel.count_by_asesor(
+                    payload.asesor_id, state=InteractionState.DERIVED.value
+                )
+            except Exception:
+                current_count = 0
+            if current_count >= MAX_DERIVED_INTERACTIONS_PER_ADVISOR:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Advisor interaction limit reached for 'derived' state",
+                )
             # Assign advisor and set assignedAt via model helper
             InteractionModel.assign_asesor(interaction_id, payload.asesor_id)
             update_fields["asesor_id"] = payload.asesor_id
@@ -878,7 +934,9 @@ async def update_interaction_state(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Unexpected error updating interaction state {interaction_id}: {e}")
+        logger.error(
+            f"Unexpected error updating interaction state {interaction_id}: {e}"
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error interno del servidor",
@@ -929,7 +987,7 @@ async def update_interaction_state(
                 }
             },
         },
-    }
+    },
 )
 async def get_chat_service_health(
     waha_client: WAHAClient = Depends(get_waha_dependency),
@@ -1058,14 +1116,18 @@ async def send_message(
             interaction = None
 
         if not interaction:
-            logger.warning(f"Acceso denegado: chat sin interacción asociada para '{chat_id}'")
+            logger.warning(
+                f"Acceso denegado: chat sin interacción asociada para '{chat_id}'"
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acceso denegado: el chat no está asociado a una interacción asignada",
             )
 
         assigned_asesor_id = interaction.get("asesor_id")
-        current_asesor_id = str(current_user.get("_id")) if current_user.get("_id") else None
+        current_asesor_id = (
+            str(current_user.get("_id")) if current_user.get("_id") else None
+        )
         if not assigned_asesor_id or assigned_asesor_id != current_asesor_id:
             logger.warning(
                 f"Acceso denegado: asesor {current_asesor_id} no asignado al chat/interacción ({chat_id})"
@@ -1134,18 +1196,6 @@ async def send_message(
             else:
                 norm_id = raw_id if isinstance(raw_id, str) else str(raw_id)
 
-            # Normalizar ACK numérico a enum string
-            raw_ack = result.get("ack")
-            ack_map = {
-                -1: "ERROR",
-                0: "PENDING",
-                1: "SERVER",
-                2: "DEVICE",
-                3: "READ",
-                4: "PLAYED",
-            }
-            norm_ack = ack_map.get(raw_ack, "PENDING") if isinstance(raw_ack, int) else raw_ack
-
             ChatModel.add_message(
                 chat_id,
                 {
@@ -1154,12 +1204,34 @@ async def send_message(
                     "timestamp": result.get("timestamp", 0),
                     "type": message_request.type.value,
                     "from_me": True,
-                    "ack": norm_ack,
                     "metadata": message_request.metadata,
                     "advisor_id": advisor_id,
                 },
                 interaction_id=interaction.get("_id") if interaction else None,
             )
+
+            # Publish real-time event to Redis for SSE subscribers
+            try:
+                cache = get_cache()
+                channel_name = f"{cache.key_prefix}stream:{chat_id}"
+                payload = {
+                    "type": "message",
+                    "chat_id": chat_id,
+                    "interaction_id": interaction.get("_id") if interaction else None,
+                    "message": {
+                        "id": norm_id,
+                        "body": message_request.message,
+                        "timestamp": result.get("timestamp", 0),
+                        "type": message_request.type.value,
+                        "from_me": True,
+                        "from": None,
+                    },
+                }
+                cache.redis_client.publish(channel_name, json.dumps(payload))
+            except Exception as pub_err:
+                logger.warning(
+                    f"No se pudo publicar evento SSE para chat {chat_id}: {pub_err}"
+                )
         except Exception as persist_err:
             logger.warning(f"No se pudo persistir el mensaje en Mongo: {persist_err}")
 
