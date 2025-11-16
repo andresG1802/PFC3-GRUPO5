@@ -10,8 +10,6 @@ from ...database.models import ChatModel, InteractionModel
 from ...services.cache import get_cache
 from ..models.webhooks import (
     MessageEvent,
-    SessionStatusEvent,
-    PresenceUpdateEvent,
     WebhookResponse,
 )
 
@@ -46,17 +44,27 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
         redis_client = cache.redis_client
 
         if event_type == "message":
-            # Invalidate caches for the affected chat
             chat_id = event_data.get("from")
             if chat_id:
-                cache.delete_pattern(f"messages:{chat_id}:*")
-                cache.delete_pattern(f"chat:{chat_id}")
-                logger.info(f"Cache invalidated for chat: {chat_id}")
-
-                # Persist incoming message in MongoDB
                 interaction = None
+                is_derived = False
                 try:
                     interaction = InteractionModel.find_by_chat_id(chat_id)
+                    is_derived = (
+                        interaction is not None
+                        and str(interaction.get("state", "")).lower() == "derived"
+                    )
+                except Exception:
+                    interaction = None
+                    is_derived = False
+
+                if is_derived:
+                    cache.delete_pattern(f"messages:{chat_id}:*")
+                    cache.delete_pattern(f"chat:{chat_id}")
+                    logger.info(f"Cache invalidated for chat: {chat_id}")
+
+                # Persist incoming message in MongoDB
+                try:
                     ChatModel.add_message(
                         chat_id,
                         {
@@ -68,7 +76,9 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                             "ack": event_data.get("ack"),
                             "from": event_data.get("from"),
                         },
-                        interaction_id=interaction.get("_id") if interaction else None,
+                        interaction_id=(
+                            interaction.get("_id") if (interaction and is_derived) else None
+                        ),
                     )
                 except Exception as e:
                     logger.warning(f"Failed to persist incoming message: {e}")
@@ -80,7 +90,7 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                         "type": "message",
                         "chat_id": chat_id,
                         "interaction_id": (
-                            interaction.get("_id") if interaction else None
+                            interaction.get("_id") if (interaction and is_derived) else None
                         ),
                         "message": {
                             "id": event_data.get("id"),
@@ -96,22 +106,6 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     logger.warning(
                         f"Failed to publish SSE event for chat {chat_id}: {e}"
                     )
-
-        elif event_type == "session.status":
-            # Update WhatsApp session status in cache
-            session = event_data.get("session")
-            status_value = event_data.get("status")
-            if session:
-                cache.set(f"session:{session}:status", status_value, ttl=3600)
-                logger.info(f"Session status updated: {session} -> {status_value}")
-
-        elif event_type == "presence.update":
-            # Update contact presence in cache
-            contact_id = event_data.get("id")
-            presence = event_data.get("presence")
-            if contact_id:
-                cache.set(f"presence:{contact_id}", presence, ttl=300)
-                logger.info(f"Presence updated: {contact_id} -> {presence}")
 
         # Store event for potential later inspection
         event_key = f"webhook_event:{datetime.now().isoformat()}"
@@ -131,9 +125,7 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
     
     **Eventos soportados:**
     - `message`: Nuevo mensaje recibido
-    - `message.ack`: Confirmación de mensaje enviado
-    - `session.status`: Cambio de estado de sesión
-    - `presence.update`: Actualización de presencia de contacto
+    - `message.ack`: Confirmación de mensaje enviado (ignorado por ahora)
     
     **Uso:** Este endpoint debe configurarse en WAHA como webhook URL.
     """,
@@ -226,38 +218,12 @@ async def receive_waha_webhook(
             # ACK events are ignored intentionally
             logger.info("ACK event received and ignored as per current configuration")
 
-        elif event_type == "session.status":
-            try:
-                # Normalizar campos de evento de sesión
-                event_data = {
-                    "session": webhook_data.get("session") or payload.get("session"),
-                    "status": payload.get("status") or webhook_data.get("status"),
-                    "timestamp": payload.get("timestamp") or webhook_data.get("timestamp"),
-                    "qr": payload.get("qr"),
-                }
-                session_event = SessionStatusEvent(**event_data)
-                logger.info(
-                    f"Estado de sesión {session_event.session}: {session_event.status}"
-                )
-            except Exception as e:
-                logger.warning(f"Error validando evento de sesión: {e}")
-
-        elif event_type == "presence.update":
-            try:
-                # Para presencia, usamos directamente el payload normalizado
-                event_data = payload or {}
-                presence_event = PresenceUpdateEvent(**event_data)
-                logger.info(
-                    f"Presencia actualizada {presence_event.id}: {presence_event.presence}"
-                )
-            except Exception as e:
-                logger.warning(f"Error validando evento de presencia: {e}")
-
         else:
             logger.info(f"Tipo de evento no reconocido: {event_type}")
 
-        # Procesar evento en segundo plano
-        background_tasks.add_task(process_webhook_event, event_type, event_data)
+        # Procesar evento en segundo plano solo para 'message'
+        if event_type == "message":
+            background_tasks.add_task(process_webhook_event, event_type, event_data)
 
         return WebhookResponse(
             status="success",

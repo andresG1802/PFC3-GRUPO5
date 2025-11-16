@@ -151,7 +151,7 @@ async def clear_chat_cache(
     },
 )
 async def get_chats_overview(
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     waha_client: WAHAClient = Depends(get_waha_dependency),
     current_user: dict = Depends(get_current_user),

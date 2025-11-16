@@ -23,6 +23,11 @@ from ..models.auth import (
 
 # Importar modelo de asesor de la base de datos
 from ...database.models import AsesorModel
+from ...database.models import InteractionModel
+from ...services.waha_client import get_waha_client
+from ...services.cache import get_cache, cache_key_for_overview
+from ..models.chats import ChatOverview
+import asyncio
 
 # Configurar router con tags a nivel de clase
 router = APIRouter(tags=["Autenticación"])
@@ -169,10 +174,99 @@ async def login(login_data: LoginRequest):
         expires_delta=access_token_expires,
     )
 
+    # Prewarm chats overview cache asynchronously to improve UX after login
+    try:
+        asyncio.create_task(_prewarm_overview_cache(limit=10, offset=0))
+    except Exception:
+        # Never block or fail login due to prewarming issues
+        pass
+
     return TokenResponse(
         access_token=access_token,
         asesor_id=str(asesor.get("_id")),
     )
+
+
+async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
+    """Prewarm chats overview cache using WAHA and pending interactions.
+
+    This runs in background, fetching a small overview and storing it in Redis cache
+    under the same key scheme used by the chats overview endpoint.
+    """
+    try:
+        # Build ids filter from pending interactions (phone/chat_id)
+        ids_filter_set = set()
+        interaction_id_map: dict[str, str] = {}
+        interactions: list[dict] = []
+        try:
+            total_interactions = InteractionModel.count_all(state="pending")
+            interactions = (
+                InteractionModel.find_all(skip=0, limit=total_interactions, state="pending")
+                if total_interactions and total_interactions > 0
+                else []
+            )
+            for it in interactions:
+                phone = (it.get("phone") or "").strip()
+                chat_id = (it.get("chat_id") or "").strip()
+                mongo_id = it.get("_id")
+                if phone:
+                    ids_filter_set.add(phone)
+                    if mongo_id:
+                        interaction_id_map[phone] = str(mongo_id)
+                elif chat_id and "@" in chat_id:
+                    ids_filter_set.add(chat_id)
+                    if mongo_id:
+                        interaction_id_map[chat_id] = str(mongo_id)
+        except Exception:
+            ids_filter_set = set()
+
+        ids_filter = list(ids_filter_set)
+
+        waha_client = await get_waha_client()
+        raw_chats: list[dict] = []
+        try:
+            raw_chats = await waha_client.get_chats_overview(limit=limit, offset=offset, ids=ids_filter or None)
+        except Exception:
+            try:
+                raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
+            except Exception:
+                raw_chats = []
+
+        # Normalize into ChatOverview dicts and attach interaction_id when present
+        overview_chats: list[dict] = []
+        for raw_chat in raw_chats:
+            try:
+                chat_type = "group" if raw_chat.get("isGroup", False) else "individual"
+                overview_data = {
+                    "id": raw_chat.get("id", ""),
+                    "name": raw_chat.get("name") or raw_chat.get("formattedTitle", "Chat sin nombre"),
+                    "type": chat_type,
+                    "timestamp": raw_chat.get("timestamp"),
+                    "unread_count": raw_chat.get("unreadCount", 0),
+                    "archived": raw_chat.get("archived", False),
+                    "pinned": raw_chat.get("pinned", False),
+                }
+                chat_obj = ChatOverview(**overview_data)
+                chat_dict = chat_obj.dict()
+                interaction_id = interaction_id_map.get(chat_dict.get("id"))
+                if interaction_id:
+                    chat_dict["interaction_id"] = interaction_id
+                overview_chats.append(chat_dict)
+            except Exception:
+                continue
+
+        # Apply simple pagination slice in case backend ignores params
+        try:
+            overview_chats = overview_chats[offset : offset + limit]
+        except Exception:
+            pass
+
+        cache = get_cache()
+        cache_key = cache_key_for_overview(limit, offset, ids_filter if ids_filter else None)
+        cache.set(cache_key, overview_chats, ttl=300)
+    except Exception:
+        # Silently ignore errors to avoid affecting login
+        pass
 
 
 @router.post("/register", response_model=RegisterAsesorResponse)

@@ -263,10 +263,11 @@ class WAHAClient(LoggerMixin):
         self, limit: int = 20, offset: int = 0, ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Get an optimized chats overview from WAHA using POST.
+        Get an optimized chats overview from WAHA using GET.
 
-        Uses `POST /api/{session}/chats/overview` so we can pass many
-        `ids` in the body when needed (per WAHA OpenAPI).
+        WAHA responde con overview en `GET /api/{session}/chats/overview`.
+        Si se proporcionan `ids`, intentaremos pasarlos como query param
+        (si no son soportados, aplicaremos filtrado local en el caller).
 
         Args:
             limit: Max chats to fetch
@@ -278,16 +279,16 @@ class WAHAClient(LoggerMixin):
         """
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
-            payload: Dict[str, Any] = {"limit": limit, "offset": offset}
+            params: Dict[str, Any] = {"limit": limit, "offset": offset}
             if ids:
-                # WAHA expects 'ids' as array of chatIds (e.g. 549xxxx@c.us)
-                payload["ids"] = ids
+                # En caso de soporte, pasar ids como query; algunos servidores aceptan ids repetidos
+                params["ids"] = ids
 
             logger.debug(
-                f"Obteniendo overview de chats (POST): {url} - Body: {payload}"
+                f"Obteniendo overview de chats (GET): {url} - Params: {params}"
             )
 
-            response = await self.client.post(url, json=payload)
+            response = await self.client.get(url, params=params)
             data = self._handle_response(response)
 
             # WAHA puede devolver directamente una lista o un objeto con lista
