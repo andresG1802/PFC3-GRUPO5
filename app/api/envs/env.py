@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     )
 
     waha_backend_webhook_url: str = Field(
-        description="URL de webhook para WAHA", 
+        description="URL de webhook para WAHA",
         default="http://backend:8000/api/v1/webhooks/waha",
     )
 

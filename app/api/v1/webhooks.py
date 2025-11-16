@@ -49,62 +49,82 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                 interaction = None
                 is_derived = False
                 try:
+                    # Primero intentar por chat_id
                     interaction = InteractionModel.find_by_chat_id(chat_id)
                     is_derived = (
                         interaction is not None
                         and str(interaction.get("state", "")).lower() == "derived"
                     )
+                    # Fallback: intentar por phone usando el mismo chat_id almacenado en interactions
+                    if not is_derived:
+                        interaction_by_phone = InteractionModel.find_by_phone(chat_id)
+                        if (
+                            interaction_by_phone is not None
+                            and str(interaction_by_phone.get("state", "")).lower()
+                            == "derived"
+                        ):
+                            interaction = interaction_by_phone
+                            is_derived = True
                 except Exception:
                     interaction = None
                     is_derived = False
 
+                # Solo invalidar cache y persistir/publicar si hay interacción DERIVED
                 if is_derived:
-                    cache.delete_pattern(f"messages:{chat_id}:*")
-                    cache.delete_pattern(f"chat:{chat_id}")
-                    logger.info(f"Cache invalidated for chat: {chat_id}")
+                    try:
+                        cache.delete_pattern(f"messages:{chat_id}:*")
+                        cache.delete_pattern(f"chat:{chat_id}")
+                        logger.info(f"Cache invalidated for chat: {chat_id}")
+                    except Exception:
+                        pass
 
-                # Persist incoming message in MongoDB
-                try:
-                    ChatModel.add_message(
-                        chat_id,
-                        {
-                            "id": event_data.get("id"),
-                            "body": event_data.get("body"),
-                            "timestamp": event_data.get("timestamp", 0),
-                            "type": event_data.get("type", "text"),
-                            "from_me": bool(event_data.get("fromMe", False)),
-                            "ack": event_data.get("ack"),
-                            "from": event_data.get("from"),
-                        },
-                        interaction_id=(
-                            interaction.get("_id") if (interaction and is_derived) else None
-                        ),
-                    )
-                except Exception as e:
-                    logger.warning(f"Failed to persist incoming message: {e}")
+                    # Persistir mensaje entrante en MongoDB (esto crea el chat si no existe)
+                    try:
+                        ChatModel.add_message(
+                            chat_id,
+                            {
+                                "id": event_data.get("id"),
+                                "body": event_data.get("body"),
+                                "timestamp": event_data.get("timestamp", 0),
+                                "type": event_data.get("type", "text"),
+                                "from_me": bool(event_data.get("fromMe", False)),
+                                "ack": event_data.get("ack"),
+                                "from": event_data.get("from"),
+                            },
+                            interaction_id=(
+                                interaction.get("_id") if interaction else None
+                            ),
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to persist incoming message: {e}")
 
-                # Publish real-time event to Redis channel for SSE subscribers
-                try:
-                    channel_name = f"{cache.key_prefix}stream:{chat_id}"
-                    payload = {
-                        "type": "message",
-                        "chat_id": chat_id,
-                        "interaction_id": (
-                            interaction.get("_id") if (interaction and is_derived) else None
-                        ),
-                        "message": {
-                            "id": event_data.get("id"),
-                            "body": event_data.get("body"),
-                            "timestamp": event_data.get("timestamp", 0),
-                            "type": event_data.get("type", "text"),
-                            "from_me": bool(event_data.get("fromMe", False)),
-                            "from": event_data.get("from"),
-                        },
-                    }
-                    redis_client.publish(channel_name, json.dumps(payload))
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to publish SSE event for chat {chat_id}: {e}"
+                    # Publicar evento en tiempo real para suscriptores SSE
+                    try:
+                        channel_name = f"{cache.key_prefix}stream:{chat_id}"
+                        payload = {
+                            "type": "message",
+                            "chat_id": chat_id,
+                            "interaction_id": (
+                                interaction.get("_id") if interaction else None
+                            ),
+                            "message": {
+                                "id": event_data.get("id"),
+                                "body": event_data.get("body"),
+                                "timestamp": event_data.get("timestamp", 0),
+                                "type": event_data.get("type", "text"),
+                                "from_me": bool(event_data.get("fromMe", False)),
+                                "from": event_data.get("from"),
+                            },
+                        }
+                        redis_client.publish(channel_name, json.dumps(payload))
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to publish SSE event for chat {chat_id}: {e}"
+                        )
+                else:
+                    # No derived → no persistimos ni publicamos, para evitar generar chats no deseados
+                    logger.info(
+                        f"Mensaje ignorado para chat {chat_id} por no existir interacción en estado 'derived'"
                     )
 
         # Store event for potential later inspection

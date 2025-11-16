@@ -201,7 +201,9 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
         try:
             total_interactions = InteractionModel.count_all(state="pending")
             interactions = (
-                InteractionModel.find_all(skip=0, limit=total_interactions, state="pending")
+                InteractionModel.find_all(
+                    skip=0, limit=total_interactions, state="pending"
+                )
                 if total_interactions and total_interactions > 0
                 else []
             )
@@ -225,7 +227,9 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
         waha_client = await get_waha_client()
         raw_chats: list[dict] = []
         try:
-            raw_chats = await waha_client.get_chats_overview(limit=limit, offset=offset, ids=ids_filter or None)
+            raw_chats = await waha_client.get_chats_overview(
+                limit=limit, offset=offset, ids=ids_filter or None
+            )
         except Exception:
             try:
                 raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
@@ -239,7 +243,8 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
                 chat_type = "group" if raw_chat.get("isGroup", False) else "individual"
                 overview_data = {
                     "id": raw_chat.get("id", ""),
-                    "name": raw_chat.get("name") or raw_chat.get("formattedTitle", "Chat sin nombre"),
+                    "name": raw_chat.get("name")
+                    or raw_chat.get("formattedTitle", "Chat sin nombre"),
                     "type": chat_type,
                     "timestamp": raw_chat.get("timestamp"),
                     "unread_count": raw_chat.get("unreadCount", 0),
@@ -262,7 +267,9 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
             pass
 
         cache = get_cache()
-        cache_key = cache_key_for_overview(limit, offset, ids_filter if ids_filter else None)
+        cache_key = cache_key_for_overview(
+            limit, offset, ids_filter if ids_filter else None
+        )
         cache.set(cache_key, overview_chats, ttl=300)
     except Exception:
         # Silently ignore errors to avoid affecting login

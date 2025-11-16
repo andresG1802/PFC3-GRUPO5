@@ -27,7 +27,6 @@ from ...services.cache import (
 from ..models.chats import (
     ChatOverview,
     ErrorResponse,
-    InteractionStatePatchRequest,
     MessagesListResponse,
     SendMessageRequest,
     SendMessageResponse,
@@ -844,10 +843,10 @@ async def stream_assigned_interactions(
 @router.patch(
     "/interactions/{interaction_id}/state",
     status_code=status.HTTP_200_OK,
-    summary="Update interaction state",
+    summary="Derivar interacción y asignar asesor autenticado",
     description=(
-        "Updates interaction state. When setting state to 'derived', an 'asesor_id' is required "
-        "and the advisor will be assigned to the interaction."
+        "Este endpoint solo puede ser invocado por asesores. Fuerza el cambio de estado a 'derived' "
+        "y asigna la interacción al asesor autenticado que realiza la solicitud. Ignora valores de entrada diferentes."
     ),
     responses={
         200: {"description": "State updated successfully"},
@@ -857,7 +856,6 @@ async def stream_assigned_interactions(
     },
 )
 async def update_interaction_state(
-    payload: InteractionStatePatchRequest,
     interaction_id: str = Path(
         ...,
         description="Unique interaction ID (MongoDB ObjectId)",
@@ -867,8 +865,15 @@ async def update_interaction_state(
     ),
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Update the interaction state with validations for 'derived'."""
+    """Deriva la interacción y asigna al asesor autenticado (solo rol 'asesor')."""
     try:
+        # Verificar rol asesor
+        if str(current_user.get("role", "")).lower() != "asesor":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: solo asesores pueden derivar interacciones",
+            )
+
         # Validate interaction exists
         interaction = InteractionModel.find_by_id(interaction_id)
         if not interaction:
@@ -877,37 +882,33 @@ async def update_interaction_state(
                 detail="Interaction not found",
             )
 
-        update_fields: Dict[str, Any] = {"state": payload.state.value}
+        # Forzar estado 'derived' y asignar al asesor autenticado
+        asesor_id = str(current_user.get("_id"))
+        if not asesor_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Advisor not found",
+            )
 
-        # If derived, asesor_id must be provided and valid
-        if payload.state == InteractionState.DERIVED:
-            if not payload.asesor_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="asesor_id is required when state is 'derived'",
-                )
-            # Validate advisor exists
-            asesor = AsesorModel.find_by_id(payload.asesor_id)
-            if not asesor:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Advisor not found",
-                )
-            # Enforce max interactions per advisor in 'derived' state
-            try:
-                current_count = InteractionModel.count_by_asesor(
-                    payload.asesor_id, state=InteractionState.DERIVED.value
-                )
-            except Exception:
-                current_count = 0
-            if current_count >= MAX_DERIVED_INTERACTIONS_PER_ADVISOR:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Advisor interaction limit reached for 'derived' state",
-                )
-            # Assign advisor and set assignedAt via model helper
-            InteractionModel.assign_asesor(interaction_id, payload.asesor_id)
-            update_fields["asesor_id"] = payload.asesor_id
+        # Enforce max interactions per advisor en estado 'derived'
+        try:
+            current_count = InteractionModel.count_by_asesor(
+                asesor_id, state=InteractionState.DERIVED.value
+            )
+        except Exception:
+            current_count = 0
+        if current_count >= MAX_DERIVED_INTERACTIONS_PER_ADVISOR:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Advisor interaction limit reached for 'derived' state",
+            )
+
+        # Asignar asesor y preparar actualización
+        InteractionModel.assign_asesor(interaction_id, asesor_id)
+        update_fields: Dict[str, Any] = {
+            "state": InteractionState.DERIVED.value,
+            "asesor_id": asesor_id,
+        }
 
         # Apply update
         updated = InteractionModel.update_by_id(interaction_id, update_fields)
@@ -925,10 +926,10 @@ async def update_interaction_state(
             pass
 
         return {
-            "message": "Interaction state updated successfully",
+            "message": "Interaction derived and assigned successfully",
             "interaction_id": interaction_id,
-            "state": payload.state.value,
-            "asesor_id": update_fields.get("asesor_id"),
+            "state": InteractionState.DERIVED.value,
+            "asesor_id": asesor_id,
         }
 
     except HTTPException:

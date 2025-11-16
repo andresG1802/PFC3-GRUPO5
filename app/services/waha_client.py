@@ -758,7 +758,9 @@ class WAHAClient(LoggerMixin):
                 headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
             ) as client:
                 # Prefer PUT /api/sessions/{session} to update config
-                put_url = f"{self.base_url.rstrip('/')}/api/sessions/{self.session_name}"
+                put_url = (
+                    f"{self.base_url.rstrip('/')}/api/sessions/{self.session_name}"
+                )
                 response = await client.put(put_url, json=session_payload)
 
                 # If PUT not supported, fallback to POST /api/sessions (create/update)
@@ -767,7 +769,9 @@ class WAHAClient(LoggerMixin):
                     response = await client.post(post_url, json=session_payload)
 
                 data = self._handle_response(response)
-                logger.info(f"WAHA session webhooks configured for '{self.session_name}': {url}")
+                logger.info(
+                    f"WAHA session webhooks configured for '{self.session_name}': {url}"
+                )
                 return data
         except httpx.TimeoutException:
             raise WAHATimeoutError("Timeout configuring WAHA webhook")
