@@ -2,32 +2,27 @@
 Autenticación - Endpoints para login, logout y gestión de tokens de asesores
 """
 
-from fastapi import APIRouter, HTTPException, Depends, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from typing import Optional
-from ..envs import JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRE_MINUTES
-from datetime import datetime, timedelta, timezone
-import jwt
+import asyncio
 import hashlib
-import os
 import hmac
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-# Importar modelos desde el módulo centralizado
-from ..models.auth import (
-    LoginRequest,
-    TokenResponse,
-    ChangePasswordRequest,
-    RegisterAsesorRequest,
-    RegisterAsesorResponse,
-)
+import jwt
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 # Importar modelo de asesor de la base de datos
-from ...database.models import AsesorModel
-from ...database.models import InteractionModel
+from ...database.models import AsesorModel, InteractionModel
+from ...services.cache import cache_key_for_overview, get_cache
 from ...services.waha_client import get_waha_client
-from ...services.cache import get_cache, cache_key_for_overview
+from ..envs import JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET_KEY
+# Importar modelos desde el módulo centralizado
+from ..models.auth import (ChangePasswordRequest, LoginRequest,
+                           RegisterAsesorRequest, RegisterAsesorResponse,
+                           TokenResponse)
 from ..models.chats import ChatOverview
-import asyncio
 
 # Configurar router con tags a nivel de clase
 router = APIRouter(tags=["Autenticación"])

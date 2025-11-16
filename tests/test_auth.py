@@ -2,13 +2,14 @@
 Tests para endpoints de autenticación
 """
 
-from fastapi.testclient import TestClient
-from unittest.mock import patch
-from datetime import timedelta
-import pytest
 import asyncio
+from datetime import timedelta
+from unittest.mock import patch
 
-from app.api.v1.auth import hash_password, create_access_token, verify_password
+import pytest
+from fastapi.testclient import TestClient
+
+from app.api.v1.auth import create_access_token, hash_password, verify_password
 
 
 class TestLogin:
@@ -467,7 +468,8 @@ class TestUtilityFunctions:
 
         # Verificar que el token contiene los datos correctos
         import jwt
-        from app.api.envs import JWT_SECRET_KEY, JWT_ALGORITHM
+
+        from app.api.envs import JWT_ALGORITHM, JWT_SECRET_KEY
 
         decoded = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         assert decoded["sub"] == "test@example.com"

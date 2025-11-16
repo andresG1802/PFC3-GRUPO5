@@ -1,9 +1,10 @@
 """Middleware de seguridad para agregar headers de seguridad a todas las respuestas HTTP"""
 
 import logging
+from typing import Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 

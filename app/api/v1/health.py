@@ -1,7 +1,8 @@
 """Health - Endpoint básico de health check (mantenido por compatibilidad)"""
 
-from fastapi import APIRouter
 from datetime import datetime, timezone
+
+from fastapi import APIRouter
 
 # Importar modelos desde el módulo centralizado
 from ..models.health import HealthResponse

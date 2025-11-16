@@ -1,22 +1,19 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL
 from .api.v1.auth import router as auth_router
-from .api.v1.health import router as health_router
 from .api.v1.chats import router as chats_router
+from .api.v1.health import router as health_router
 from .api.v1.webhooks import router as webhooks_router
-from .database.connection import get_database, close_database_connection
+from .database.connection import close_database_connection, get_database
 from .database.seeder import seed_database
+from .middleware import (ErrorHandlerMiddleware, RateLimitingMiddleware,
+                         SecurityHeadersMiddleware, TimeoutMiddleware)
 from .services.waha_client import close_waha_client
 from .utils.logging_config import init_logging
-from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL
-from .middleware import (
-    ErrorHandlerMiddleware,
-    TimeoutMiddleware,
-    SecurityHeadersMiddleware,
-    RateLimitingMiddleware,
-)
 
 
 @asynccontextmanager
@@ -101,6 +98,7 @@ app.include_router(webhooks_router, prefix="/api/v1/webhooks")
 
 if __name__ == "__main__":
     import uvicorn
+
     from .api.envs import HOST, PORT
 
     uvicorn.run(

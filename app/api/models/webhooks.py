@@ -2,11 +2,12 @@
 Modelos Pydantic para eventos de webhook de WAHA
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, Dict, Any
 from enum import Enum
+from typing import Any, Dict, Optional
 
-from .chats import MessageType, MessageAck
+from pydantic import BaseModel, ConfigDict, Field
+
+from .chats import MessageAck, MessageType
 
 
 class SessionStatus(str, Enum):

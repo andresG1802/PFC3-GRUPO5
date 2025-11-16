@@ -1,9 +1,10 @@
 """Modelos Pydantic para interactions"""
 
-from pydantic import BaseModel, Field, ConfigDict, field_serializer
-from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 class InteractionState(str, Enum):

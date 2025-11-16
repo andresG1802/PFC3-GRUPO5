@@ -4,40 +4,27 @@ Adds SSE streaming for real-time chat messages per interaction and
 provides utilities to resolve chat identifiers from interactions.
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path, Depends, status
-from fastapi.responses import StreamingResponse
-from typing import Dict, Any, AsyncGenerator, Optional
 import asyncio
 import json
 from datetime import datetime, timezone
+from typing import Any, AsyncGenerator, Dict, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi.responses import StreamingResponse
 
 from app.api import envs
 
-from ...services.waha_client import (
-    get_waha_client,
-    WAHAClient,
-    WAHAConnectionError,
-    WAHANotFoundError,
-    WAHATimeoutError,
-)
-from ...services.cache import (
-    get_cache,
-    cache_key_for_overview,
-)
-from ..models.chats import (
-    ChatOverview,
-    ErrorResponse,
-    MessagesListResponse,
-    SendMessageRequest,
-    SendMessageResponse,
-    Message,
-    MessageType,
-)
+from ...database.models import AsesorModel, ChatModel, InteractionModel
+from ...services.cache import cache_key_for_overview, get_cache
+from ...services.waha_client import (WAHAClient, WAHAConnectionError,
+                                     WAHANotFoundError, WAHATimeoutError,
+                                     get_waha_client)
 from ...utils.logging_config import get_logger
-from .auth import get_current_user, get_current_admin
-from ...database.models import InteractionModel, ChatModel
+from ..models.chats import (ChatOverview, ErrorResponse, Message,
+                            MessagesListResponse, MessageType,
+                            SendMessageRequest, SendMessageResponse)
 from ..models.interactions import InteractionState
-from ...database.models import AsesorModel
+from .auth import get_current_admin, get_current_user
 
 # Logger específico para este módulo
 logger = get_logger(__name__)
