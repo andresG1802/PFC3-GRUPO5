@@ -23,7 +23,3 @@
 - La API estará disponible en `http://localhost:8000`.
 - Puedes acceder a la documentación interactiva de la API en `http://localhost:8000/docs`.
 - El dashboard de WAHA se encuentra en `http://localhost:3000/dashboard`.
-
-TODOs:
-- [ ] Implementar límites hardcodeados en caso no pasar limites en overwiew.
-- [ ] Límite de interacciones en las q esta un asesor.
