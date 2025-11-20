@@ -8,11 +8,8 @@ from typing import Any, Dict, List, Optional
 from bson import ObjectId
 from pydantic import BaseModel
 
-from .connection import (
-    get_asesores_collection,
-    get_chats_collection,
-    get_interactions_collection,
-)
+from .connection import (get_asesores_collection, get_chats_collection,
+                         get_interactions_collection)
 
 
 class TimelineEntry(BaseModel):

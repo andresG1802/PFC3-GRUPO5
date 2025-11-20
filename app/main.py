@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
-import httpx
 
+import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -11,12 +11,8 @@ from .api.v1.health import router as health_router
 from .api.v1.webhooks import router as webhooks_router
 from .database.connection import close_database_connection, get_database
 from .database.seeder import seed_database
-from .middleware import (
-    ErrorHandlerMiddleware,
-    RateLimitingMiddleware,
-    SecurityHeadersMiddleware,
-    TimeoutMiddleware,
-)
+from .middleware import (ErrorHandlerMiddleware, RateLimitingMiddleware,
+                         SecurityHeadersMiddleware, TimeoutMiddleware)
 from .services.waha_client import close_waha_client
 from .utils.logging_config import init_logging
 

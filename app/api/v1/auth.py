@@ -18,15 +18,10 @@ from ...database.models import AsesorModel, InteractionModel
 from ...services.cache import cache_key_for_overview, get_cache
 from ...services.waha_client import get_waha_client
 from ..envs import JWT_ALGORITHM, JWT_EXPIRE_MINUTES, JWT_SECRET_KEY
-
 # Importar modelos desde el módulo centralizado
-from ..models.auth import (
-    ChangePasswordRequest,
-    LoginRequest,
-    RegisterAsesorRequest,
-    RegisterAsesorResponse,
-    TokenResponse,
-)
+from ..models.auth import (ChangePasswordRequest, LoginRequest,
+                           RegisterAsesorRequest, RegisterAsesorResponse,
+                           TokenResponse)
 from ..models.chats import ChatOverview
 
 # Configurar router con tags a nivel de clase
