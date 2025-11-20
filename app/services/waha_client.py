@@ -788,6 +788,36 @@ class WAHAClient(LoggerMixin):
         # `enabled` se mantiene por compatibilidad aunque WAHA solo use la lista `webhooks`.
         return await self.configure_webhooks([webhook_cfg])
 
+    @retry_on_failure(max_retries=3, delay=1.0)
+    async def start_session(self, session_name: Optional[str] = None) -> Dict[str, Any]:
+        """Inicia la sesión de WAHA mediante POST /api/sessions/{session}/start.
+
+        Args:
+            session_name: Nombre de la sesión a iniciar. Si no se provee, usa `self.session_name`.
+
+        Returns:
+            Dict con el payload de respuesta de WAHA.
+
+        Raises:
+            WAHATimeoutError: Cuando WAHA no responde dentro del timeout.
+            WAHAConnectionError: Cuando ocurre un error de conexión o servidor.
+        """
+        target_session = session_name or self.session_name
+        try:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=3.0),
+                headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
+            ) as client:
+                url = f"{self.base_url.rstrip('/')}/api/sessions/{target_session}/start"
+                response = await client.post(url)
+                data = self._handle_response(response)
+                logger.info(f"WAHA session '{target_session}' iniciada correctamente")
+                return data
+        except httpx.TimeoutException:
+            raise WAHATimeoutError("Timeout iniciando sesión WAHA")
+        except httpx.HTTPError as e:
+            raise WAHAConnectionError(f"Error iniciando sesión WAHA: {str(e)}")
+
 
 # Instancia global del cliente (se inicializa cuando se necesite)
 _waha_client: Optional[WAHAClient] = None

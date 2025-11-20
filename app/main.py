@@ -14,8 +14,9 @@ from .database.seeder import seed_database
 from .middleware import (ErrorHandlerMiddleware, RateLimitingMiddleware,
                          SecurityHeadersMiddleware, TimeoutMiddleware)
 from .services.waha_client import close_waha_client
-from .utils.logging_config import init_logging
+from .utils.logging_config import init_logging, get_logger
 
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,19 +24,19 @@ async def lifespan(app: FastAPI):
     Gestión del ciclo de vida de la aplicación
     """
     # Startup
-    print("Starting Backend API...")
+    logger.info("Starting Backend API...")
 
     # Inicializar logging
     init_logging()
 
-    print("Connecting to MongoDB...")
+    logger.info("Connecting to MongoDB...")
     get_database()  # Inicializar conexión a la base de datos
 
     # Ejecutar seeder para poblar la base de datos
     try:
         seed_database()
     except Exception as e:
-        print(f"Error durante el seeding: {e}")
+        logger.error(f"Error during seeding: {e}")
 
     # Configure WAHA webhooks: backend always; add n8n if readiness OK
     try:
@@ -74,19 +75,26 @@ async def lifespan(app: FastAPI):
         await waha_client.configure_webhooks(webhooks)
 
         if n8n_ready:
-            print("WAHA webhooks configured: backend + n8n")
+            logger.info("WAHA webhooks configured: backend + n8n")
         else:
-            print("WAHA webhook configured: backend only (n8n not ready)")
+            logger.info("WAHA webhook configured: backend only (n8n not ready)")
+
+        # Iniciar sesión WAHA 'default' una vez todo listo
+        try:
+            await waha_client.start_session()
+            logger.info("WAHA session 'default' started")
+        except Exception as e:
+            logger.error(f"Failed to start WAHA session 'default': {e}")
     except Exception as e:
-        print(f"WAHA webhook configuration skipped: {e}")
+        logger.error(f"WAHA webhook configuration skipped: {e}")
 
     yield
     # Shutdown
-    print("Closing database connections...")
+    logger.info("Closing database connections...")
     close_database_connection()
-    print("Closing WAHA client...")
+    logger.info("Closing WAHA client...")
     await close_waha_client()
-    print("API successfully shutdown")
+    logger.info("API successfully shutdown")
 
 
 app = FastAPI(
