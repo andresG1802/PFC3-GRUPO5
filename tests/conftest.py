@@ -2,15 +2,16 @@
 Configuración global de pytest y fixtures compartidos
 """
 
-import pytest
 import asyncio
-from typing import AsyncGenerator, Generator
-from unittest.mock import AsyncMock, MagicMock, patch
-from fastapi.testclient import TestClient
-from httpx import AsyncClient
 import os
 import sys
+from typing import AsyncGenerator, Generator
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 from dotenv import load_dotenv
+from fastapi.testclient import TestClient
+from httpx import AsyncClient
 
 # Cargar variables de entorno de test antes de importar la app
 test_env_path = os.path.join(os.path.dirname(__file__), ".env.test")
@@ -182,8 +183,9 @@ def mock_asesor_model():
 @pytest.fixture
 def valid_jwt_token():
     """Token JWT válido para pruebas"""
-    from app.api.v1.auth import create_access_token
     from datetime import timedelta
+
+    from app.api.v1.auth import create_access_token
 
     token = create_access_token(
         data={"sub": "test@example.com", "role": "asesor"},
@@ -195,8 +197,9 @@ def valid_jwt_token():
 @pytest.fixture
 def admin_jwt_token():
     """Token JWT de administrador para pruebas"""
-    from app.api.v1.auth import create_access_token
     from datetime import timedelta
+
+    from app.api.v1.auth import create_access_token
 
     token = create_access_token(
         data={"sub": "admin@example.com", "role": "admin"},

@@ -2,9 +2,11 @@
 Modelos Pydantic para el router de Chats
 """
 
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List, Any, Dict
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from .interactions import InteractionState
 
 

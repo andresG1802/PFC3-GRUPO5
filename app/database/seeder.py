@@ -5,9 +5,10 @@ Seeder para poblar la base de datos con datos de prueba
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List
-from .models import AsesorModel, InteractionModel
+
 from ..api.envs import DEBUG
 from ..api.v1.auth import hash_password
+from .models import AsesorModel, InteractionModel
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -213,7 +214,8 @@ def clear_database():
     logger.warning("Limpiando base de datos...")
 
     try:
-        from .connection import get_interactions_collection, get_asesores_collection
+        from .connection import (get_asesores_collection,
+                                 get_interactions_collection)
 
         # Limpiar collections
         interactions_collection = get_interactions_collection()

@@ -2,15 +2,14 @@
 Configuración de conexión a MongoDB
 """
 
+import logging
+from typing import Optional
+
 from pymongo import MongoClient
 from pymongo.database import Database
-from typing import Optional
-import logging
-from ..api.envs import (
-    MONGO_INITDB_ROOT_USERNAME,
-    MONGO_INITDB_ROOT_PASSWORD,
-    MONGO_INITDB_DATABASE,
-)
+
+from ..api.envs import (MONGO_INITDB_DATABASE, MONGO_INITDB_ROOT_PASSWORD,
+                        MONGO_INITDB_ROOT_USERNAME)
 
 # Configurar logging
 logger = logging.getLogger(__name__)

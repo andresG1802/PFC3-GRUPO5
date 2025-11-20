@@ -4,19 +4,17 @@ Middleware para manejo robusto de errores y timeouts
 
 import time
 import traceback
-from typing import Callable, Dict, Any
-from fastapi import Request, Response, HTTPException
+from typing import Any, Callable, Dict
+
+import httpx
+from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
-import httpx
 
-from ..services.waha_client import (
-    WAHAConnectionError,
-    WAHATimeoutError,
-    WAHANotFoundError,
-    WAHAAuthenticationError,
-)
+from ..services.waha_client import (WAHAAuthenticationError,
+                                    WAHAConnectionError, WAHANotFoundError,
+                                    WAHATimeoutError)
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)

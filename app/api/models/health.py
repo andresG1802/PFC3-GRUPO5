@@ -2,8 +2,9 @@
 Modelos Pydantic para el router de Health
 """
 
-from pydantic import BaseModel
 from datetime import datetime
+
+from pydantic import BaseModel
 
 
 class HealthResponse(BaseModel):

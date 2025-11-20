@@ -4,8 +4,9 @@ Configuración centralizada de seguridad y rate limiting
 
 import json
 from typing import Dict, Optional
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
 from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class SecurityConfig(BaseSettings):

@@ -6,14 +6,15 @@ import hashlib
 import json
 import logging
 import time
-from typing import Optional, Dict, Tuple
-from fastapi import Request, Response, HTTPException
+from typing import Dict, Optional, Tuple
+
+import redis.asyncio as redis
+from fastapi import HTTPException, Request, Response
 from fastapi.security.utils import get_authorization_scheme_param
 from starlette.middleware.base import BaseHTTPMiddleware
-import redis.asyncio as redis
 
-from ..config.security import rate_limit_config
 from ..api.v1.auth import verify_token
+from ..config.security import rate_limit_config
 
 logger = logging.getLogger(__name__)
 

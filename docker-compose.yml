@@ -80,6 +80,12 @@ services:
       WAHA_ENCRYPTION_KEY: ${WAHA_ENCRYPTION_KEY:-please-change-me}
       WAHA_API_KEY: ${WAHA_API_KEY:-please-change-me}
       WAHA_PRINT_QR: false
+      QUEUE_HEALTH_CHECK_ACTIVE: true
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       db:
         condition: service_healthy

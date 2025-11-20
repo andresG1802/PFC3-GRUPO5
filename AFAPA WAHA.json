@@ -1,0 +1,4325 @@
+{
+  "name": "AFAPA WAHA vers",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "@devlikeapro/n8n-nodes-waha.wahaTrigger",
+      "typeVersion": 202502,
+      "position": [
+        -2256,
+        -464
+      ],
+      "id": "d4420522-6553-48ce-8181-67b18f77dea9",
+      "name": "WAHA Trigger",
+      "webhookId": "2b3124d8-e9ef-4879-a832-af9a419fbf57"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.all();\n\n// Si el nodo devolvió al menos un item con contenido real\nif (\n  input.length > 0 &&\n  input[0].json &&\n  Object.keys(input[0].json).length > 0\n) {\n  return [{\n    json: {\n      found: true,\n      interaction: input[0].json,\n    },\n  }, ];\n}\n\n// Si el resultado está vacío o solo tiene {}\nreturn [{\n  json: {\n    found: false,\n  },\n}, ];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1360,
+        208
+      ],
+      "id": "96d15809-399b-4883-a5d2-c42d03642f7e",
+      "name": "Respuesta Q2"
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "collection": "interactions",
+        "fields": "=phone,state,step,route,lang,createdAt",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        -464,
+        320
+      ],
+      "id": "efeccc51-f93a-4868-9623-b15d3961afb6",
+      "name": "Crear interacción",
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1b2e73f8-5cbb-4783-bf77-9d33f158f24a",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1136,
+        208
+      ],
+      "id": "1c494d76-306b-4a45-9344-67a0dc91f0ad",
+      "name": "Q2 encontró?"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2032,
+        208
+      ],
+      "id": "0ef457c7-9f92-4633-87d1-bd1999fe70f7",
+      "name": "Cached"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2256,
+        496
+      ],
+      "id": "e6da5285-fbea-4988-9f51-940263fe8e3b",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $('Cached').first().json.payload;\n\nreturn [{\n  json: {\n    \"phone\": payload.from,\n    \"state\": \"menus\",\n    \"route\": \"route_1\",\n    \"step\": 1,\n    \"lang\": null,\n    \"timeline\": [\n      {\n        \"route\": null,\n        \"step\": null,\n        \"userInput\": null\n      }\n    ],\n    \"createdAt\": new Date()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        320
+      ],
+      "id": "4456c228-a4b0-46bf-85e5-560ab1b85f62",
+      "name": "Esquema nueva interacción"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n    json: {\n        \"phone\": $('Cached').first().json.payload.from,\n        \"lang\": \"es\"\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        1288
+      ],
+      "id": "ed3b8a98-02f4-4627-a444-a5543bed9da4",
+      "name": "Asignar lenguaje - es"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n    json: {\n        \"phone\": $('Cached').first().json.payload.from,\n        \"lang\": \"qu\"\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        1648
+      ],
+      "id": "00a96132-8aff-455b-95c5-ecd6035dbc1b",
+      "name": "Asignar lenguaje - qu"
+    },
+    {
+      "parameters": {
+        "collection": "interactions",
+        "options": {
+          "limit": 1,
+          "sort": "{\n  \"createdAt\": -1\n}"
+        },
+        "query": "={\n  \"phone\": \"{{ $('Cached').item.json.payload.from }}\"\n}"
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        -1584,
+        208
+      ],
+      "id": "50de23e9-0d4c-4cc8-815e-7592aecdb935",
+      "name": "Encontrar estado de la última interacción",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "interactions",
+        "updateKey": "=phone",
+        "fields": "=lang",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        1456
+      ],
+      "id": "e94ca534-858a-43f8-9d6c-d6a7dbcf313b",
+      "name": "Actualizar lang de interacción",
+      "alwaysOutputData": false,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      },
+      "notes": "input corresponde al step anterior"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.interaction.state }}",
+                    "rightValue": "menus",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "94937566-ac80-46c2-8959-d93056154729"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "menus"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1d33ea8-366c-4f06-8fbe-1277068c738a",
+                    "leftValue": "={{ $json.interaction.state }}",
+                    "rightValue": "closed",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "closed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -912,
+        -2096
+      ],
+      "id": "271c7d30-0a89-4ac0-804f-8d3527fa6846",
+      "name": "Switch: state"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d782a326-2094-48a0-8317-dfef017148e4",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.route }}",
+                    "rightValue": "route_4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1d33ea8-366c-4f06-8fbe-1277068c738a",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.route }}",
+                    "rightValue": "route_3",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6c4a4da1-512c-404b-b3f1-8b00d8938705",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.route }}",
+                    "rightValue": "route_2",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.route }}",
+                    "rightValue": "route_1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "94937566-ac80-46c2-8959-d93056154729"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        -16,
+        -2176
+      ],
+      "id": "1589b1f8-f907-495f-be2c-36914f6c99ff",
+      "name": "Switch: route"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Cached').item.json.payload.body }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "976aeb00-c7b5-4911-b76b-a42185315b28",
+              "leftValue": "={{ $('Cached').item.json.payload.body }}",
+              "rightValue": "1",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        432,
+        1456
+      ],
+      "id": "0ade467e-af2a-4bb3-a348-02d3db05bfdb",
+      "name": "Español?1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $json.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1104,
+        1456
+      ],
+      "id": "b5f0da75-12e1-461e-ba39-3b06f9e687ac",
+      "name": "Español?2"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c71c4d70-6f3e-4ef4-8813-2eea7d006f77",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1d33ea8-366c-4f06-8fbe-1277068c738a",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6c4a4da1-512c-404b-b3f1-8b00d8938705",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "94937566-ac80-46c2-8959-d93056154729"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        880,
+        560
+      ],
+      "id": "6b79202d-7d3e-4912-9fce-a77fc10f8007",
+      "name": "Switch: step",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        1072
+      ],
+      "id": "78d62f06-b3ad-479a-9c30-414847151603",
+      "name": "Español?"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Denunciatachu icha tapukunkichu?\n1. Willakuy\n2. Tapukuy`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        1264
+      ],
+      "id": "20738239-503b-441b-9a6e-d04aa5cdd6eb",
+      "name": "r2-st1-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Vas a realizar una denuncia o consulta?\n1. Denuncia\n2. Consulta`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        1072
+      ],
+      "id": "c431aa71-e91b-4582-9cbf-53845f86c5b9",
+      "name": "r2-st1-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Con qué necesitas ayuda?\n1. Violencia sexual\n2. Denuncia penal\n3. Deuda alimentaria`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1328,
+        1456
+      ],
+      "id": "52169844-df30-4b22-b545-bf8a79f15418",
+      "name": "r1-st2-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Imapitaq yanapayta necesitanki?\n1. Warmi-qhari puñuypi abuso\n2. Denuncia penal nisqamanta\n3. Mikhuy manukuy`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1328,
+        1648
+      ],
+      "id": "785f1cd5-a9cd-4ecb-8928-cb0f82bec11f",
+      "name": "r1-st2-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`!Hola! Amekaitam Imanata 👋\n1. Español\n2. Quechua / Runasimi\n3. Awajún\n4. Wampís `}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        -240,
+        320
+      ],
+      "id": "5dffecc9-508e-4221-9e26-e66afd6aaeb7",
+      "name": "r1-st1",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{\n    json: {\n        phone: $('Cached').first().json.payload.from,\n        step: 2\n    }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        1456
+      ],
+      "id": "21688677-4647-450f-909a-2d515b17222e",
+      "name": "Add step to 2"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "collection": "interactions",
+        "updateKey": "=phone",
+        "fields": "=step",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1776,
+        1456
+      ],
+      "id": "60bf410f-004e-4830-8cf8-cb2f31a96f9f",
+      "name": "Add step",
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      },
+      "notes": "input corresponde al step anterior"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        688
+      ],
+      "id": "0d87567d-5886-48ef-9745-bff23b01e464",
+      "name": "Español?3"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Eres la víctima o testigo?\n1. Víctima\n2. Testigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        688
+      ],
+      "id": "94a7f680-679b-4161-8b71-3dfadf88c2be",
+      "name": "r2-st2-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Qanchu kanki chay victima icha testigo?\n1. Victima nisqa\n2. Testigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        880
+      ],
+      "id": "3f9c1ef7-4045-465b-8899-8969d5c3c573",
+      "name": "r2-st2-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        304
+      ],
+      "id": "19196e13-2242-4cfc-aad7-2bd389a3502e",
+      "name": "Español?4"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Brindenos más información`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        304
+      ],
+      "id": "8ef867a1-3051-4197-b8cb-98ac12d19bbd",
+      "name": "r2-st3-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Astawan willakuykunata quwayku`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        496
+      ],
+      "id": "1f7f28de-98d0-4324-9cb7-d496409348ad",
+      "name": "r2-st3-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "d782a326-2094-48a0-8317-dfef017148e4",
+                    "leftValue": "={{ $('Invalido?1').item.json.route }}",
+                    "rightValue": "route_4",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1d33ea8-366c-4f06-8fbe-1277068c738a",
+                    "leftValue": "={{ $('Invalido?1').item.json.route }}",
+                    "rightValue": "route_3",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6c4a4da1-512c-404b-b3f1-8b00d8938705",
+                    "leftValue": "={{ $('Invalido?1').item.json.route }}",
+                    "rightValue": "route_2",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "a204f157-3fef-4c29-b5b2-40ee1ac830d3",
+                    "leftValue": "={{ $('Invalido?1').item.json.route }}",
+                    "rightValue": "route_1",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "route_1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        208,
+        1136
+      ],
+      "id": "4a6c813e-30ba-404f-b4b2-d76b1ab5fe03",
+      "name": "Switch: route1"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        1072
+      ],
+      "id": "dfc37539-87d4-4878-ab7e-63c7922e4985",
+      "name": "Añadir a interaction",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst currentRoute = $input.first().json.route;\nconst currentStep = $input.first().json.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: currentRoute,\n  step: currentStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: $input.first().json.phone,\n  state: interactionObj.state,\n  step: 2,\n  route: \"route_2\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        1072
+      ],
+      "id": "97a8887c-6cbf-47b0-a257-503afb403772",
+      "name": "Recopilar"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        688
+      ],
+      "id": "5a03afdf-4bc1-4aca-8d3f-38ec9ed39453",
+      "name": "Añadir a interaction1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 3,\n  route: \"route_2\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        688
+      ],
+      "id": "b5d67050-4cfa-40f5-874f-a92bdab0df18",
+      "name": "Recopilar1"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        304
+      ],
+      "id": "bf8c537b-a271-4915-aa26-11859b8c6e29",
+      "name": "Añadir a interaction2",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 4,\n  route: \"route_2\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        304
+      ],
+      "id": "1b2001ef-7c9e-4752-bc83-c30e5037410a",
+      "name": "Recopilar2"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -80
+      ],
+      "id": "d48d6a26-a17c-41cb-968e-077e20d89859",
+      "name": "Añadir a interaction3",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: \"pending\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -80
+      ],
+      "id": "82cbb229-4fd7-42e0-b0e1-86603d0d2c46",
+      "name": "Recopilar3"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¡Gracias! Un asesor estará poniéndose en contacto contigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -80
+      ],
+      "id": "76acea4c-57ab-423d-b83b-bf09ebb5a668",
+      "name": "r2-st4-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Riqsikuyki! Huk yuyaychaqmi qanwan rimanqa`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        112
+      ],
+      "id": "315f64ff-5317-4320-a90a-44d299ab5367",
+      "name": "r2-st4-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -80
+      ],
+      "id": "294fb0e1-7876-48cc-ad5c-aa09be48379e",
+      "name": "Español?5"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e3773849-d0c4-45f4-b7e7-466bb1eabe8f",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "5"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c71c4d70-6f3e-4ef4-8813-2eea7d006f77",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1d33ea8-366c-4f06-8fbe-1277068c738a",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6c4a4da1-512c-404b-b3f1-8b00d8938705",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "94937566-ac80-46c2-8959-d93056154729"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        880,
+        -1184
+      ],
+      "id": "e5f0165e-0c8e-48e1-941a-0c92d3a4dd03",
+      "name": "Switch: step1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "35be4b03-20bc-4067-80cf-05dfee7e8030",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 5,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "5"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c71c4d70-6f3e-4ef4-8813-2eea7d006f77",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 4,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "4"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "e1d33ea8-366c-4f06-8fbe-1277068c738a",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 3,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "3"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6c4a4da1-512c-404b-b3f1-8b00d8938705",
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "2"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Switch: state').item.json.interaction.step }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    },
+                    "id": "94937566-ac80-46c2-8959-d93056154729"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        880,
+        -3104
+      ],
+      "id": "699b9f9e-0e5b-4517-8026-f6ee8acc557e",
+      "name": "Switch: step2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -464
+      ],
+      "id": "c8e1bfc8-fe45-4b8a-b711-5ca258fd7e00",
+      "name": "Español?6"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -464
+      ],
+      "id": "e0a3c767-61e8-4cbd-a962-b2e4dc86feea",
+      "name": "Añadir a interaction4",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst currentRoute = $input.first().json.route;\nconst currentStep = $input.first().json.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: currentRoute,\n  step: currentStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: $input.first().json.phone || $input.first().json.interaction.phone,\n  state: interactionObj.state,\n  step: 2,\n  route: \"route_3\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -464
+      ],
+      "id": "81b206bc-f6c1-4d79-8d41-7525dd294f42",
+      "name": "Recopilar4"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Vas a realizar una denuncia o consulta?\n1. Denuncia\n2. Consulta`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -464
+      ],
+      "id": "e55e4213-5fb7-4539-8c55-562929e8f963",
+      "name": "r3-st1-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Denunciatachu icha tapukunkichu?\n1. Willakuy\n2. Tapukuy`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -272
+      ],
+      "id": "c832fa11-7753-4c86-81fd-349e52a21114",
+      "name": "r3-st1-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -848
+      ],
+      "id": "4d66e052-f580-4b61-8da3-253476008feb",
+      "name": "Español?7"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -848
+      ],
+      "id": "ad4d778b-999e-4058-9b0b-e265cd45576b",
+      "name": "Añadir a interaction5",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 3,\n  route: \"route_3\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -848
+      ],
+      "id": "83f39a08-5f34-430d-be5c-487c7010ddb5",
+      "name": "Recopilar5"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Eres la víctima o testigo?\n1. Víctima\n2. Testigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -848
+      ],
+      "id": "1a2859f8-0871-4e3f-94e5-b8ae361670f2",
+      "name": "r3-st2-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Qanchu kanki chay victima icha testigo?\n1. Victima nisqa\n2. Testigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -656
+      ],
+      "id": "d3c8f189-bc88-4081-ba90-ea6d33e9b2ff",
+      "name": "r3-st2-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -1232
+      ],
+      "id": "c878ae4c-6c75-4687-a5c4-311507cd98a5",
+      "name": "Español?8"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -1232
+      ],
+      "id": "7a643ae2-8c59-4098-98dd-7bc2e66fa4a9",
+      "name": "Añadir a interaction6",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 4,\n  route: \"route_3\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -1232
+      ],
+      "id": "b5b5fd09-79d2-45c8-9fea-624f0a97a027",
+      "name": "Recopilar6"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Qué tipo de delito?\n1. Robo\n2. Agresión física\n3. Amenaza`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -1232
+      ],
+      "id": "2af389d7-b646-4f36-a49b-97c5110cc800",
+      "name": "r3-st3-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Imayna hucha?\n1. Suwakuy\n2. Aychapi maqay\n3. Manchachikuy`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -1040
+      ],
+      "id": "8e893b13-c981-45d6-a723-41a676eabf6f",
+      "name": "r3-st3-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -1616
+      ],
+      "id": "c198807c-0e79-4564-85a2-8a3a2545ae94",
+      "name": "Español?9"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -1616
+      ],
+      "id": "1b76d3fd-2e0b-4ca4-9458-157d7f96c479",
+      "name": "Añadir a interaction7",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 5,\n  route: \"route_3\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -1616
+      ],
+      "id": "cef1ad2e-394f-4ee9-b51f-dcb9276a3315",
+      "name": "Recopilar7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $json.isValid }}",
+              "rightValue": "route_1",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -464,
+        -2144
+      ],
+      "id": "c8e3bf02-e5e6-48ae-8191-6e2f02f2b6f5",
+      "name": "Invalido?1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -2384
+      ],
+      "id": "1354df28-06e9-4bf4-8109-b976f244c003",
+      "name": "Español?10"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -2384
+      ],
+      "id": "beb5b67e-c70a-4d33-a4fb-f2fe5124e68d",
+      "name": "Añadir a interaction8",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst currentRoute = $input.first().json.route;\nconst currentStep = $input.first().json.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: currentRoute,\n  step: currentStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: $input.first().json.phone,\n  state: interactionObj.state,\n  step: 2,\n  route: \"route_4\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -2384
+      ],
+      "id": "ccaf084a-9564-4089-ac5e-c9fdc2510b27",
+      "name": "Recopilar8"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -2768
+      ],
+      "id": "b692c635-6532-46f1-9499-9317af75d8de",
+      "name": "Español?11"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -2768
+      ],
+      "id": "e3a30292-72fa-49da-8557-57538e6a184b",
+      "name": "Añadir a interaction9",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 3,\n  route: \"route_4\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -2768
+      ],
+      "id": "d3fabbbf-98a1-4b76-a1b7-5fe33e3d5f18",
+      "name": "Recopilar9"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -3152
+      ],
+      "id": "1758b8fb-b6e9-48f7-8e21-c395a93edfd3",
+      "name": "Español?12"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -3152
+      ],
+      "id": "2e98a825-15cc-420b-8770-2315829cb0bc",
+      "name": "Añadir a interaction10",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 4,\n  route: \"route_4\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -3152
+      ],
+      "id": "90759acc-9536-4fdb-b6f6-bd30a976fefa",
+      "name": "Recopilar10"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -3536
+      ],
+      "id": "9c303019-e369-4914-8756-756fd701fdb1",
+      "name": "Español?13"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,step,route,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -3536
+      ],
+      "id": "854117b6-00c6-48e6-b8bb-76379e1d5980",
+      "name": "Añadir a interaction11",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: interactionObj.state,\n  step: 5,\n  route: \"route_4\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -3536
+      ],
+      "id": "71548f00-62e4-4b40-b2a1-bf8ab3f27cc6",
+      "name": "Recopilar11"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Brindenos más información`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -3536
+      ],
+      "id": "812d087b-8ae1-4612-abcd-f3b2b0835a90",
+      "name": "r2-st3-es2",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Astawan willakuykunata quwayku`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -3344
+      ],
+      "id": "e0a74b0d-3abd-44fb-a865-5bb33353d1e3",
+      "name": "r2-st3-qu2",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst cached = $('Cached').first().json;\nconst userInput = cached.payload.body.trim();\n\n// 🗺️ Configuración de rutas, pasos y opciones válidas\nconst flowMap = {\n  route_1: {\n    1: { valid: [\"1\", \"2\", \"3\", \"4\"], next: { route: \"route_1\", step: 2 } },\n    2: {\n      valid: [\"1\", \"2\", \"3\", \"4\"],\n      nextRoutes: {\n        \"1\": { route: \"route_2\", step: 1 },\n        \"2\": { route: \"route_3\", step: 1 },\n        \"3\": { route: \"route_4\", step: 1 },\n        \"4\": { route: \"route_1\", step: 1 } // ejemplo de reinicio o cierre\n      }\n    }\n  },\n\n  route_2: {\n    1: { valid: [\"1\", \"2\"], next: { route: \"route_2\", step: 2 } },\n    2: { valid: [\"1\", \"2\"], next: { route: \"route_2\", step: 3 } },\n    3: { valid: [], next: { route: \"route_2\", step: 4 } }, // válido sin opciones\n    4: { valid: [] } // último paso\n  },\n\n  route_3: {\n    1: { valid: [\"1\", \"2\"], next: { route: \"route_3\", step: 2 } },\n    2: { valid: [\"1\", \"2\"], next: { route: \"route_3\", step: 3 } },\n    3: { valid: [\"1\", \"2\", \"3\"], next: { route: \"route_3\", step: 4 } },\n    4: { valid: [], next: { route: \"route_3\", step: 5 } },\n    5: { valid: [] }\n  },\n\n  route_4: {\n    1: { valid: [\"1\", \"2\"], next: { route: \"route_4\", step: 2 } },\n    2: { valid: [\"1\", \"2\"], next: { route: \"route_4\", step: 3 } },\n    3: { valid: [\"1\", \"2\"], next: { route: \"route_4\", step: 4 } },\n    4: { valid: [], next: { route: \"route_4\", step: 5 } },\n    5: { valid: [] }\n  }\n};\n\n// 🧭 Obtener configuración del flujo actual\nconst route = input.interaction.route;\nconst step = input.interaction.step;\nconst routeConfig = flowMap[route]?.[step];\n\n// 🔒 Validación: ruta y paso definidos\nif (!routeConfig) {\n  return { isValid: false, error: \"Ruta o paso no definido\" };\n}\n\n// ⚙️ Si el paso no requiere respuesta (valid está vacío), sigue automáticamente\nif (routeConfig.valid.length === 0) {\n  return {\n    isValid: true,\n    phone: input.interaction.phone,\n    ...(routeConfig.next ?? {}) // continúa si hay siguiente definido\n  };\n}\n\n// ✅ Validar input del usuario\nif (!routeConfig.valid.includes(userInput)) {\n  return { isValid: false };\n}\n\n// 🔄 Obtener siguiente paso o ruta\nlet nextRouteData = routeConfig.next;\nif (routeConfig.nextRoutes) {\n  nextRouteData = routeConfig.nextRoutes[userInput];\n}\n\nreturn {\n  isValid: true,\n  phone: input.interaction.phone,\n  ...nextRouteData\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -688,
+        -2144
+      ],
+      "id": "095437d2-0725-4292-a45f-72c697e0657e",
+      "name": "Process reply"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -2000
+      ],
+      "id": "1c3ac4eb-4a6c-435b-9603-02f8f50b5cff",
+      "name": "Añadir a interaction12",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: \"pending\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -2000
+      ],
+      "id": "17831d16-190b-49b6-ad2e-549c97bf1e51",
+      "name": "Recopilar12"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -2000
+      ],
+      "id": "eca49ef9-b519-4a4f-8eb0-ce91efc2bd13",
+      "name": "Español?14"
+    },
+    {
+      "parameters": {
+        "operation": "findOneAndUpdate",
+        "collection": "interactions",
+        "updateKey": "phone",
+        "fields": "=state,timeline",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mongoDb",
+      "typeVersion": 1.2,
+      "position": [
+        1328,
+        -3920
+      ],
+      "id": "8857ddc4-abfd-4d17-841f-5616b1de7b6c",
+      "name": "Añadir a interaction13",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mongoDb": {
+          "id": "0bpqYenp8hAWwwPC",
+          "name": "MongoDB account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const interactionObj = $('Respuesta Q2').first().json.interaction;\nconst lastRoute = $('Respuesta Q2').first().json.interaction.route;\nconst lastStep = $('Respuesta Q2').first().json.interaction.step;\nconst userInput = $('Cached').first().json.payload.body.trim();\n\n// Si no existe 'timeline', lo creamos como un array vacío\nif (!interactionObj.timeline) {\n  interactionObj.timeline = [];\n}\n\ninteractionObj.timeline.push({\n  route: lastRoute,\n  step: lastStep,\n  userInput: userInput\n});\n\nreturn {\n  phone: interactionObj.phone,\n  state: \"pending\",\n  timeline: interactionObj.timeline\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        -3920
+      ],
+      "id": "3bc6b370-5c7c-4eb7-b005-40317112e63b",
+      "name": "Recopilar13"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¡Gracias! Un asesor estará poniéndose en contacto contigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -3920
+      ],
+      "id": "5aecf149-d902-41d7-aef7-33d83b71d3dc",
+      "name": "r2-st4-es2",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Riqsikuyki! Huk yuyaychaqmi qanwan rimanqa`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -3728
+      ],
+      "id": "df0a25ff-b571-4631-9285-ebc5e2ef6716",
+      "name": "r2-st4-qu2",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "853ea428-f965-4fd8-9f94-f8736ca718fe",
+              "leftValue": "={{ $('Respuesta Q2').item.json.interaction.lang }}",
+              "rightValue": "es",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -3920
+      ],
+      "id": "c2aac638-e2f6-43c1-aaef-795a26a935ec",
+      "name": "Español?15"
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Astawan willakuykunata quwayku`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -1424
+      ],
+      "id": "f6cd8eab-0fd9-4de9-a7ff-c8e9900ca85f",
+      "name": "r3-st4-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Brindenos más información`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -1616
+      ],
+      "id": "11801715-b383-4665-8d95-d59e6a62a60f",
+      "name": "r3-st4-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`Riqsikuyki! Huk yuyaychaqmi qanwan rimanqa`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -1808
+      ],
+      "id": "cf342977-c7bb-448c-b04d-130583476a52",
+      "name": "r3-st5-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¡Gracias! Un asesor estará poniéndose en contacto contigo`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -2000
+      ],
+      "id": "07cf59d4-9127-4998-9417-a2260d979135",
+      "name": "r3-st5-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Vas a realizar una denuncia o consulta?\n1. Denuncia\n2. Consulta`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -2384
+      ],
+      "id": "6300a37a-a1f9-4059-a073-35570c4629f9",
+      "name": "r4-st1-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Denunciatachu icha tapukunkichu?\n1. Willakuy\n2. Tapukuy`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -2192
+      ],
+      "id": "54547ff7-84ec-4180-89cb-3ce37b7dcedf",
+      "name": "r4-st1-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Eres la persona encargada del(los) menor(es)?\n1. Si\n2. No`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -2768
+      ],
+      "id": "b7561f2a-8bea-46db-9017-dac1b6b4717d",
+      "name": "r4-st2-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Qanchu kanki chay menor de edad nisqamanta encargakuq runa?\n1. Arí\n2. Mana`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -2576
+      ],
+      "id": "cb132347-e714-4563-96b8-821ea0a4556d",
+      "name": "r4-st2-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Existe una sentencia previa?\n1. Si\n2. No`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -3152
+      ],
+      "id": "fd821014-3f0b-4ebd-ae71-f07395598376",
+      "name": "r4-st3-es",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Text",
+        "session": "default",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "reply_to": "=",
+        "text": "={{`¿Kanchu ñawpaq kamachikuy?\n1. Arí\n2. Mana`}}",
+        "linkPreview": false,
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        1776,
+        -2960
+      ],
+      "id": "1a03ddfa-3755-4e80-b04b-df1e050ef185",
+      "name": "r4-st3-qu",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Send Seen",
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        -1808,
+        208
+      ],
+      "id": "5ae6504f-151d-4d7f-8d4e-eda306fd1773",
+      "name": "Send Seen",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Start Typing",
+        "session": "={{ $('Cached').item.json.session }}",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        -912,
+        368
+      ],
+      "id": "54e7cdfa-fc13-48fb-bdc2-3d3b01687508",
+      "name": "Start Typing",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Stop Typing",
+        "session": "={{ $('Cached').item.json.session }}",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        -16,
+        320
+      ],
+      "id": "4f85a714-8b83-41d2-b607-141ac7013763",
+      "name": "Stop Typing",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Stop Typing",
+        "session": "={{ $('Cached').item.json.session }}",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        2000,
+        -1376
+      ],
+      "id": "0d6ac666-9be0-4006-8cb6-1b8c250f0c2e",
+      "name": "Stop Typing2",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "Chatting",
+        "operation": "Start Typing",
+        "session": "={{ $('Cached').item.json.session }}",
+        "chatId": "={{ $('Cached').item.json.payload.from }}",
+        "requestOptions": {}
+      },
+      "type": "@devlikeapro/n8n-nodes-waha.WAHA",
+      "typeVersion": 202502,
+      "position": [
+        -240,
+        -2144
+      ],
+      "id": "b613596c-6261-449d-9471-68eabb334d43",
+      "name": "Start Typing1",
+      "credentials": {
+        "wahaApi": {
+          "id": "uWKOp7mz9yfuWaj9",
+          "name": "WAHA account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "WAHA Trigger": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Cached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta Q2": {
+      "main": [
+        [
+          {
+            "node": "Q2 encontró?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear interacción": {
+      "main": [
+        [
+          {
+            "node": "r1-st1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Q2 encontró?": {
+      "main": [
+        [
+          {
+            "node": "Switch: state",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Start Typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cached": {
+      "main": [
+        [
+          {
+            "node": "Send Seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Cached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Esquema nueva interacción": {
+      "main": [
+        [
+          {
+            "node": "Crear interacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asignar lenguaje - es": {
+      "main": [
+        [
+          {
+            "node": "Actualizar lang de interacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Asignar lenguaje - qu": {
+      "main": [
+        [
+          {
+            "node": "Actualizar lang de interacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Encontrar estado de la última interacción": {
+      "main": [
+        [
+          {
+            "node": "Respuesta Q2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar lang de interacción": {
+      "main": [
+        [
+          {
+            "node": "Español?2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: state": {
+      "main": [
+        [
+          {
+            "node": "Process reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Esquema nueva interacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: route": {
+      "main": [
+        [
+          {
+            "node": "Switch: step2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch: step1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch: step",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch: route1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?1": {
+      "main": [
+        [
+          {
+            "node": "Asignar lenguaje - es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Asignar lenguaje - qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?2": {
+      "main": [
+        [
+          {
+            "node": "r1-st2-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r1-st2-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: step": {
+      "main": [
+        [
+          {
+            "node": "Recopilar3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?": {
+      "main": [
+        [
+          {
+            "node": "r2-st1-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r2-st1-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r1-st2-es": {
+      "main": [
+        [
+          {
+            "node": "Add step to 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r1-st2-qu": {
+      "main": [
+        [
+          {
+            "node": "Add step to 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r1-st1": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add step to 2": {
+      "main": [
+        [
+          {
+            "node": "Add step",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?3": {
+      "main": [
+        [
+          {
+            "node": "r2-st2-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r2-st2-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?4": {
+      "main": [
+        [
+          {
+            "node": "r2-st3-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r2-st3-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: route1": {
+      "main": [
+        [
+          {
+            "node": "Switch: step2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch: step1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch: step",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Español?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction": {
+      "main": [
+        [
+          {
+            "node": "Español?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar1": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction1": {
+      "main": [
+        [
+          {
+            "node": "Español?3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar2": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction2": {
+      "main": [
+        [
+          {
+            "node": "Español?4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar3": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction3": {
+      "main": [
+        [
+          {
+            "node": "Español?5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?5": {
+      "main": [
+        [
+          {
+            "node": "r2-st4-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r2-st4-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?6": {
+      "main": [
+        [
+          {
+            "node": "r3-st1-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r3-st1-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction4": {
+      "main": [
+        [
+          {
+            "node": "Español?6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar4": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: step1": {
+      "main": [
+        [
+          {
+            "node": "Recopilar12",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar6",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?7": {
+      "main": [
+        [
+          {
+            "node": "r3-st2-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r3-st2-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction5": {
+      "main": [
+        [
+          {
+            "node": "Español?7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar5": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?8": {
+      "main": [
+        [
+          {
+            "node": "r3-st3-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r3-st3-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction6": {
+      "main": [
+        [
+          {
+            "node": "Español?8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar6": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction7": {
+      "main": [
+        [
+          {
+            "node": "Español?9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar7": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?9": {
+      "main": [
+        [
+          {
+            "node": "r3-st4-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r3-st4-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invalido?1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Start Typing1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?10": {
+      "main": [
+        [
+          {
+            "node": "r4-st1-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r4-st1-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction8": {
+      "main": [
+        [
+          {
+            "node": "Español?10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar8": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch: step2": {
+      "main": [
+        [
+          {
+            "node": "Recopilar13",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar11",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar10",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar9",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Recopilar8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?11": {
+      "main": [
+        [
+          {
+            "node": "r4-st2-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r4-st2-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction9": {
+      "main": [
+        [
+          {
+            "node": "Español?11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar9": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?12": {
+      "main": [
+        [
+          {
+            "node": "r4-st3-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r4-st3-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction10": {
+      "main": [
+        [
+          {
+            "node": "Español?12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar10": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?13": {
+      "main": [
+        [
+          {
+            "node": "r2-st3-es2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r2-st3-qu2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction11": {
+      "main": [
+        [
+          {
+            "node": "Español?13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar11": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process reply": {
+      "main": [
+        [
+          {
+            "node": "Invalido?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction12": {
+      "main": [
+        [
+          {
+            "node": "Español?14",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar12": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?14": {
+      "main": [
+        [
+          {
+            "node": "r3-st5-es",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r3-st5-qu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Añadir a interaction13": {
+      "main": [
+        [
+          {
+            "node": "Español?15",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recopilar13": {
+      "main": [
+        [
+          {
+            "node": "Añadir a interaction13",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Español?15": {
+      "main": [
+        [
+          {
+            "node": "r2-st4-es2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "r2-st4-qu2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Seen": {
+      "main": [
+        [
+          {
+            "node": "Encontrar estado de la última interacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Typing": {
+      "main": [
+        [
+          {
+            "node": "Esquema nueva interacción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st1-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st1-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st2-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st2-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st3-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st3-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st4-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st4-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st1-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st1-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st2-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st2-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st3-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st3-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st4-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st4-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st5-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r3-st5-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r4-st1-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r4-st1-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r4-st2-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r4-st2-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r4-st3-qu": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r4-st3-es": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st3-qu2": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st3-es2": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st4-qu2": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "r2-st4-es2": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Typing1": {
+      "main": [
+        [
+          {
+            "node": "Switch: route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add step": {
+      "main": [
+        [
+          {
+            "node": "Stop Typing2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c984e311-16eb-404f-ab23-cfa22c934458",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e301f4e49fe424a9804039031dba0ed0d4fe9d7fe3087f65fcadf02d4b80a222"
+  },
+  "id": "Hi2wVsv2CnGnmp0Q",
+  "tags": []
+}

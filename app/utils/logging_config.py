@@ -2,13 +2,13 @@
 Configuración de logging para la aplicación
 """
 
+import json
 import logging
 import logging.handlers
 import sys
-from pathlib import Path
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
-import json
 
 from ..api.envs import DEBUG
 

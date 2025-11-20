@@ -2,8 +2,9 @@
 Modelos Pydantic para gestión de presencia de contactos
 """
 
-from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List
+from typing import List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 from .webhooks import PresenceStatus
 

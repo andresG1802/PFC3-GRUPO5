@@ -81,4 +81,5 @@ dev = [
     "typing-inspection==0.4.2",
     "urllib3==2.5.0",
     "watchfiles==1.1.0",
+    "isort>=7.0.0",
 ]
