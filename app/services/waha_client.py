@@ -717,38 +717,32 @@ class WAHAClient(LoggerMixin):
         return data
 
     @retry_on_failure(max_retries=3, delay=1.0)
-    async def configure_webhook(
+    async def configure_webhooks(
         self,
-        url: str,
-        enabled: bool = True,
-        events: Optional[List[str]] = None,
+        webhooks: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         """
-        Configure WAHA session webhooks to send real-time events to the provided URL.
+        Configura uno o varios webhooks de sesión en WAHA.
 
         Args:
-            url: Publicly reachable URL from WAHA to our backend webhook endpoint.
-            enabled: Whether the webhook should be enabled.
-            events: Optional list of event names (e.g., ["message", "session.status", "presence.update"]).
+            webhooks: Lista de objetos con al menos la clave `url` y opcionalmente `events`.
 
         Returns:
-            Dict with WAHA response payload.
+            Dict con el payload de respuesta de WAHA.
 
         Raises:
-            WAHATimeoutError: When WAHA does not respond within timeout.
-            WAHAConnectionError: When a connection or server error occurs.
-            WAHAAuthenticationError: When API Key is invalid.
+            WAHATimeoutError: Cuando WAHA no responde dentro del timeout.
+            WAHAConnectionError: Cuando ocurre un error de conexión o servidor.
+            WAHAAuthenticationError: Cuando la API Key es inválida.
         """
-        try:
-            # Session-level webhooks per WAHA documentation
-            webhook_cfg: Dict[str, Any] = {"url": url}
-            if events:
-                webhook_cfg["events"] = events
+        if not webhooks:
+            raise ValueError("Debe proporcionar al menos un webhook para configurar")
 
+        try:
             session_payload: Dict[str, Any] = {
                 "name": self.session_name,
                 "config": {
-                    "webhooks": [webhook_cfg],
+                    "webhooks": webhooks,
                 },
             }
 
@@ -756,26 +750,43 @@ class WAHAClient(LoggerMixin):
                 timeout=httpx.Timeout(10.0, connect=3.0),
                 headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
             ) as client:
-                # Prefer PUT /api/sessions/{session} to update config
+                # Preferir PUT /api/sessions/{session} para actualizar la config
                 put_url = (
                     f"{self.base_url.rstrip('/')}/api/sessions/{self.session_name}"
                 )
                 response = await client.put(put_url, json=session_payload)
 
-                # If PUT not supported, fallback to POST /api/sessions (create/update)
+                # Si PUT no está soportado, fallback a POST /api/sessions (create/update)
                 if response.status_code == 404:
                     post_url = f"{self.base_url.rstrip('/')}/api/sessions"
                     response = await client.post(post_url, json=session_payload)
 
                 data = self._handle_response(response)
+                urls = ", ".join([w.get("url", "") for w in webhooks])
                 logger.info(
-                    f"WAHA session webhooks configured for '{self.session_name}': {url}"
+                    f"WAHA session webhooks configurados para '{self.session_name}': {urls}"
                 )
                 return data
         except httpx.TimeoutException:
-            raise WAHATimeoutError("Timeout configuring WAHA webhook")
+            raise WAHATimeoutError("Timeout configurando webhooks de WAHA")
         except httpx.HTTPError as e:
-            raise WAHAConnectionError(f"Failed configuring WAHA webhook: {str(e)}")
+            raise WAHAConnectionError(f"Error configurando webhooks de WAHA: {str(e)}")
+
+    @retry_on_failure(max_retries=3, delay=1.0)
+    async def configure_webhook(
+        self,
+        url: str,
+        enabled: bool = True,
+        events: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Compatibilidad: configura un único webhook.
+        """
+        webhook_cfg: Dict[str, Any] = {"url": url}
+        if events:
+            webhook_cfg["events"] = events
+        # `enabled` se mantiene por compatibilidad aunque WAHA solo use la lista `webhooks`.
+        return await self.configure_webhooks([webhook_cfg])
 
 
 # Instancia global del cliente (se inicializa cuando se necesite)

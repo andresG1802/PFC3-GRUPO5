@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import httpx
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,18 +37,42 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"Error durante el seeding: {e}")
 
-    # Configure WAHA webhook to deliver incoming WhatsApp events to our backend
+    # Configure WAHA webhooks: backend always; add n8n if readiness OK
     try:
         from .services.waha_client import get_waha_client
 
         waha_client = await get_waha_client()
-        webhook_url = WAHA_BACKEND_WEBHOOK_URL
-        await waha_client.configure_webhook(
-            webhook_url,
-            enabled=True,
-            events=["message", "message.ack"],
-        )
-        print(f"WAHA webhook configured: {webhook_url}")
+
+        # Backend webhook (siempre)
+        backend_webhook = {
+            "url": WAHA_BACKEND_WEBHOOK_URL,
+            "events": ["message", "message.ack"],
+        }
+
+        webhooks = [backend_webhook]
+
+        # Detectar n8n activo
+        n8n_ready = False
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(3.0, connect=1.0)) as client:
+                resp = await client.get("http://n8n:5678/healthz/readiness")
+                n8n_ready = resp.status_code == 200
+        except Exception:
+            n8n_ready = False
+
+        if n8n_ready:
+            # Webhook extra hacia n8n (solo eventos 'message')
+            webhooks.append({
+                "url": "http://n8n:5678/webhook/2b3124d8-e9ef-4879-a832-af9a419fbf57/waha",
+                "events": ["message"],
+            })
+
+        await waha_client.configure_webhooks(webhooks)
+
+        if n8n_ready:
+            print("WAHA webhooks configured: backend + n8n")
+        else:
+            print("WAHA webhook configured: backend only (n8n not ready)")
     except Exception as e:
         print(f"WAHA webhook configuration skipped: {e}")
 
