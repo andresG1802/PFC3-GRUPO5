@@ -11,8 +11,12 @@ from .api.v1.health import router as health_router
 from .api.v1.webhooks import router as webhooks_router
 from .database.connection import close_database_connection, get_database
 from .database.seeder import seed_database
-from .middleware import (ErrorHandlerMiddleware, RateLimitingMiddleware,
-                         SecurityHeadersMiddleware, TimeoutMiddleware)
+from .middleware import (
+    ErrorHandlerMiddleware,
+    RateLimitingMiddleware,
+    SecurityHeadersMiddleware,
+    TimeoutMiddleware,
+)
 from .services.waha_client import close_waha_client
 from .utils.logging_config import init_logging
 
@@ -54,7 +58,9 @@ async def lifespan(app: FastAPI):
         # Detectar n8n activo
         n8n_ready = False
         try:
-            async with httpx.AsyncClient(timeout=httpx.Timeout(3.0, connect=1.0)) as client:
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(3.0, connect=1.0)
+            ) as client:
                 resp = await client.get("http://n8n:5678/healthz/readiness")
                 n8n_ready = resp.status_code == 200
         except Exception:
@@ -62,10 +68,12 @@ async def lifespan(app: FastAPI):
 
         if n8n_ready:
             # Webhook extra hacia n8n (solo eventos 'message')
-            webhooks.append({
-                "url": "http://n8n:5678/webhook/2b3124d8-e9ef-4879-a832-af9a419fbf57/waha",
-                "events": ["message"],
-            })
+            webhooks.append(
+                {
+                    "url": "http://n8n:5678/webhook/2b3124d8-e9ef-4879-a832-af9a419fbf57/waha",
+                    "events": ["message"],
+                }
+            )
 
         await waha_client.configure_webhooks(webhooks)
 

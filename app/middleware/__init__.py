@@ -2,8 +2,11 @@
 Módulo de middleware para la aplicación FastAPI
 """
 
-from .error_handler import (ErrorHandlerMiddleware, RateLimitMiddleware,
-                            TimeoutMiddleware)
+from .error_handler import (
+    ErrorHandlerMiddleware,
+    RateLimitMiddleware,
+    TimeoutMiddleware,
+)
 from .rate_limiting import RateLimitingMiddleware
 from .security import SecurityHeadersMiddleware
 

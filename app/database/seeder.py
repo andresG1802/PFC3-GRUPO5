@@ -214,8 +214,7 @@ def clear_database():
     logger.warning("Limpiando base de datos...")
 
     try:
-        from .connection import (get_asesores_collection,
-                                 get_interactions_collection)
+        from .connection import get_asesores_collection, get_interactions_collection
 
         # Limpiar collections
         interactions_collection = get_interactions_collection()

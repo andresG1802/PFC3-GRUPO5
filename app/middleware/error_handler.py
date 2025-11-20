@@ -12,9 +12,12 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
-from ..services.waha_client import (WAHAAuthenticationError,
-                                    WAHAConnectionError, WAHANotFoundError,
-                                    WAHATimeoutError)
+from ..services.waha_client import (
+    WAHAAuthenticationError,
+    WAHAConnectionError,
+    WAHANotFoundError,
+    WAHATimeoutError,
+)
 from ..utils.logging_config import get_logger
 
 logger = get_logger(__name__)

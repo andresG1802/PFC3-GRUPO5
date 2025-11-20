@@ -16,13 +16,23 @@ from app.api import envs
 
 from ...database.models import AsesorModel, ChatModel, InteractionModel
 from ...services.cache import cache_key_for_overview, get_cache
-from ...services.waha_client import (WAHAClient, WAHAConnectionError,
-                                     WAHANotFoundError, WAHATimeoutError,
-                                     get_waha_client)
+from ...services.waha_client import (
+    WAHAClient,
+    WAHAConnectionError,
+    WAHANotFoundError,
+    WAHATimeoutError,
+    get_waha_client,
+)
 from ...utils.logging_config import get_logger
-from ..models.chats import (ChatOverview, ErrorResponse, Message,
-                            MessagesListResponse, MessageType,
-                            SendMessageRequest, SendMessageResponse)
+from ..models.chats import (
+    ChatOverview,
+    ErrorResponse,
+    Message,
+    MessagesListResponse,
+    MessageType,
+    SendMessageRequest,
+    SendMessageResponse,
+)
 from ..models.interactions import InteractionState
 from .auth import get_current_admin, get_current_user
 
