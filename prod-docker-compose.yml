@@ -62,7 +62,7 @@ services:
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: true
     healthcheck:
       test: [ "CMD", "node", "-e", "require('http').get('http://localhost:5678/healthz/readiness', res => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));" ]
-      interval: 1m30s
+      interval: 15s
       timeout: 15s
       retries: 5
       start_period: 30s
@@ -77,7 +77,7 @@ services:
     image: devlikeapro/waha:latest-2025.11.2
     restart: always
     ports:
-      - "3000:8000"
+      - "3000:3000"
     env_file:
       - .env
     environment:
@@ -99,8 +99,8 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8000/ping || exit 1" ]
-      interval: 1m30s
+      test: [ "CMD-SHELL", "curl -f http://localhost:3000/ping || exit 1" ]
+      interval: 15s
       timeout: 15s
       retries: 5
       start_period: 30s
@@ -127,9 +127,9 @@ services:
     env_file:
       - .env
     ports:
-      - ${PORT}:8000
+      - ${API_PORT}:8000
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:${PORT}/health || exit 1" ]
+      test: [ "CMD-SHELL", "curl -f http://localhost:${API_PORT}/health || exit 1" ]
       interval: 5m
       timeout: 30s
       retries: 5
