@@ -6,3 +6,4 @@ model/
 .benchmarks/
 benchmarks*
 .pytest_cache/
+.sessions

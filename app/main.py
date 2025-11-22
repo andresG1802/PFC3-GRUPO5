@@ -1,10 +1,8 @@
 from contextlib import asynccontextmanager
-
-import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL
+from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL, DEBUG
 from .api.v1.auth import router as auth_router
 from .api.v1.chats import router as chats_router
 from .api.v1.health import router as health_router
@@ -14,8 +12,9 @@ from .database.seeder import seed_database
 from .middleware import (ErrorHandlerMiddleware, RateLimitingMiddleware,
                          SecurityHeadersMiddleware, TimeoutMiddleware)
 from .services.waha_client import close_waha_client
-from .utils.logging_config import init_logging
+from .utils.logging_config import init_logging, get_logger
 
+logger = get_logger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,70 +22,50 @@ async def lifespan(app: FastAPI):
     Gestión del ciclo de vida de la aplicación
     """
     # Startup
-    print("Starting Backend API...")
+    logger.info("Starting Backend API...")
 
     # Inicializar logging
     init_logging()
 
-    print("Connecting to MongoDB...")
+    logger.info("Connecting to MongoDB...")
     get_database()  # Inicializar conexión a la base de datos
 
     # Ejecutar seeder para poblar la base de datos
     try:
         seed_database()
     except Exception as e:
-        print(f"Error durante el seeding: {e}")
+        logger.error(f"Error during seeding: {e}")
 
-    # Configure WAHA webhooks: backend always; add n8n if readiness OK
+    # Configure WAHA webhooks: backend
     try:
         from .services.waha_client import get_waha_client
 
         waha_client = await get_waha_client()
 
-        # Backend webhook (siempre)
+        # Backend webhook
         backend_webhook = {
             "url": WAHA_BACKEND_WEBHOOK_URL,
             "events": ["message", "message.ack"],
         }
+        await waha_client.configure_webhooks([backend_webhook])
+        logger.info("WAHA webhook configured: backend only")
 
-        webhooks = [backend_webhook]
-
-        # Detectar n8n activo
-        n8n_ready = False
+        # Iniciar sesión WAHA 'default' una vez todo listo
         try:
-            async with httpx.AsyncClient(
-                timeout=httpx.Timeout(3.0, connect=1.0)
-            ) as client:
-                resp = await client.get("http://n8n:5678/healthz/readiness")
-                n8n_ready = resp.status_code == 200
-        except Exception:
-            n8n_ready = False
-
-        if n8n_ready:
-            # Webhook extra hacia n8n (solo eventos 'message')
-            webhooks.append(
-                {
-                    "url": "http://n8n:5678/webhook/2b3124d8-e9ef-4879-a832-af9a419fbf57/waha",
-                    "events": ["message"],
-                }
-            )
-
-        await waha_client.configure_webhooks(webhooks)
-
-        if n8n_ready:
-            print("WAHA webhooks configured: backend + n8n")
-        else:
-            print("WAHA webhook configured: backend only (n8n not ready)")
+            await waha_client.start_session()
+            logger.info("WAHA session 'default' started")
+        except Exception as e:
+            logger.error(f"Failed to start WAHA session 'default': {e}")
     except Exception as e:
-        print(f"WAHA webhook configuration skipped: {e}")
+        logger.error(f"WAHA webhook configuration skipped: {e}")
 
     yield
     # Shutdown
-    print("Closing database connections...")
+    logger.info("Closing database connections...")
     close_database_connection()
-    print("Closing WAHA client...")
+    logger.info("Closing WAHA client...")
     await close_waha_client()
-    print("API successfully shutdown")
+    logger.info("API successfully shutdown")
 
 
 app = FastAPI(
@@ -94,9 +73,9 @@ app = FastAPI(
     description="API Backend para Aru-Link",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if DEBUG else None,
+    redoc_url="/redoc" if DEBUG else None,
+    openapi_url="/openapi.json" if DEBUG else None,
     contact={"name": "ARU-LINK Team", "email": "support@aru-link.com"},
     servers=[
         {"url": "http://localhost:8000", "description": "Servidor de desarrollo"},
@@ -109,7 +88,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios permitidos
+    allow_origins=["*"] if DEBUG else ["https://aru-link.com", "https://www.aru-link.com", "https://dash.aru-link.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -128,12 +107,12 @@ app.include_router(webhooks_router, prefix="/api/v1/webhooks")
 if __name__ == "__main__":
     import uvicorn
 
-    from .api.envs import HOST, PORT
+    from .api.envs import HOST
 
     uvicorn.run(
         "app.main:app",
         host=HOST,
-        port=PORT,
+        port=8000,
         log_level="info",
         server_header=False,
         date_header=False,

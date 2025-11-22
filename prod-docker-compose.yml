@@ -2,9 +2,7 @@ services:
   db:
     container_name: afapa-db
     image: mongo:8.0-noble
-    restart: unless-stopped
-    ports:
-      - "27018:27017"
+    restart: always
     volumes:
       - db_data:/data/db
     env_file:
@@ -30,11 +28,9 @@ services:
   redis:
     container_name: afapa-redis
     image: redis:8.2.2-alpine
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env
-    ports:
-      - ${REDIS_PORT}:6379
     volumes:
       - redis_data:/data
     logging:
@@ -48,7 +44,7 @@ services:
   n8n:
     container_name: afapa-n8n
     image: n8nio/n8n:1.121.2
-    restart: unless-stopped
+    restart: always
     ports:
       - "5678:5678"
     env_file:
@@ -66,7 +62,7 @@ services:
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: true
     healthcheck:
       test: [ "CMD", "node", "-e", "require('http').get('http://localhost:5678/healthz/readiness', res => { process.exit(res.statusCode === 200 ? 0 : 1); }).on('error', () => process.exit(1));" ]
-      interval: 1m30s
+      interval: 15s
       timeout: 15s
       retries: 5
       start_period: 30s
@@ -79,9 +75,9 @@ services:
   waha:
     container_name: afapa-waha
     image: devlikeapro/waha:latest-2025.11.2
-    restart: unless-stopped
+    restart: always
     ports:
-      - "3000:8000"
+      - "3000:3000"
     env_file:
       - .env
     environment:
@@ -92,34 +88,33 @@ services:
       WAHA_PRINT_QR: false
       QUEUE_HEALTH_CHECK_ACTIVE: true
       TZ: America/Lima
+      DEBUG: 0
       WAHA_SESSION_CONFIG_IGNORE_STATUS: true
       WAHA_SESSION_CONFIG_IGNORE_GROUPS: true
       WAHA_SESSION_CONFIG_IGNORE_CHANNELS: true
       WAHA_SESSION_CONFIG_IGNORE_BROADCAST: true
-    volumes:
-      - ./.sessions:/app/.sessions
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:8000/ping || exit 1" ]
-      interval: 1m30s
-      timeout: 30s
+      test: [ "CMD-SHELL", "curl -f http://localhost:3000/ping || exit 1" ]
+      interval: 15s
+      timeout: 15s
       retries: 5
       start_period: 30s
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./.sessions:/app/.sessions
     networks:
       - afapa-network
 
   backend:
     container_name: afapa-backend
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: arulink/afapa-backend:main
     depends_on:
       db:
         condition: service_healthy
@@ -132,9 +127,9 @@ services:
     env_file:
       - .env
     ports:
-      - ${PORT}:8000
+      - ${API_PORT}:8000
     healthcheck:
-      test: [ "CMD-SHELL", "curl -f http://localhost:${PORT}/health || exit 1" ]
+      test: [ "CMD-SHELL", "curl -f http://localhost:${API_PORT}/health || exit 1" ]
       interval: 5m
       timeout: 30s
       retries: 5
@@ -157,6 +152,4 @@ volumes:
   n8n_data:
     driver: local
   redis_data:
-    driver: local
-  sessions:
     driver: local
