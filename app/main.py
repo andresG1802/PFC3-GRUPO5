@@ -1,4 +1,6 @@
+import asyncio
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,44 @@ from .services.waha_client import close_waha_client
 from .utils.logging_config import get_logger, init_logging
 
 logger = get_logger(__name__)
+
+
+ACTIVE_WAHA_STATUSES = {"WORKING", "STARTED", "CONNECTED", "INITIALIZED", "READY"}
+
+
+async def _waha_supervisor(app: FastAPI, interval_seconds: int = 30) -> None:
+    """Periodically ensure WAHA is reachable, session is active, and webhooks are set.
+
+    This keeps the worker properly configured after WAHA restarts.
+    """
+    # Local import to avoid circular deps on app import time
+    from .services.waha_client import _quick_ping, get_waha_client
+
+    while True:
+        try:
+            waha_client = await get_waha_client()
+
+            reachable = await _quick_ping(
+                waha_client.base_url, waha_client.session_name
+            )
+            if not reachable:
+                logger.warning("WAHA unreachable; supervisor will retry later")
+            else:
+                status_payload = await waha_client.get_session_status()
+                status = str(status_payload.get("status", "")).upper()
+                if status not in ACTIVE_WAHA_STATUSES:
+                    await waha_client.start_session()
+
+                # Idempotent webhook apply: safe to call repeatedly
+                backend_webhook = {
+                    "url": WAHA_BACKEND_WEBHOOK_URL,
+                    "events": ["message", "message.ack"],
+                }
+                await waha_client.configure_webhooks([backend_webhook])
+        except Exception as e:
+            logger.warning(f"WAHA supervisor encountered an error: {e}")
+
+        await asyncio.sleep(interval_seconds)
 
 
 @asynccontextmanager
@@ -52,7 +92,7 @@ async def lifespan(app: FastAPI):
         await waha_client.configure_webhooks([backend_webhook])
         logger.info("WAHA webhook configured: backend only")
 
-        # Iniciar sesión WAHA 'default' una vez todo listo
+        # Start WAHA 'default' session once ready
         try:
             await waha_client.start_session()
             logger.info("WAHA session 'default' started")
@@ -61,10 +101,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"WAHA webhook configuration skipped: {e}")
 
+    # Launch WAHA supervisor in background to recover after WAHA restarts
+    app.state.waha_supervisor_task = asyncio.create_task(_waha_supervisor(app, 30))
+
     yield
     # Shutdown
     logger.info("Closing database connections...")
     close_database_connection()
+    # Stop supervisor background task
+    task: Optional[asyncio.Task] = getattr(app.state, "waha_supervisor_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except Exception:
+            pass
     logger.info("Closing WAHA client...")
     await close_waha_client()
     logger.info("API successfully shutdown")
@@ -79,7 +130,8 @@ app = FastAPI(
     # TBD: Deshabilitar docs en producción
     docs_url="/docs",
     redoc_url="/redoc" if DEBUG else None,
-    openapi_url="/openapi.json" if DEBUG else None,
+    # TBD: Deshabilitar docs en producción
+    openapi_url="/openapi.json",
     contact={"name": "ARU-LINK Team", "email": "support@aru-link.com"},
     servers=[
         {"url": "http://localhost:8000", "description": "Servidor de desarrollo"},

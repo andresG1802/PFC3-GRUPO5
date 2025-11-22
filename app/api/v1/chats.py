@@ -99,13 +99,15 @@ async def clear_chat_cache(
     "/overview",
     summary="Get chats overview",
     description=(
-        "Gets an optimized chats overview from WAHA. If pending interactions exist in the database, "
-        "the request applies an 'ids' filter built from interaction phone numbers as stored ('<phone>@<domain>') "
-        "so WAHA only returns overview for those contacts. Each chat includes the related MongoDB interaction '_id' when available."
+        "Returns an optimized chats overview. The service queries WAHA for chat metadata and "
+        "enriches each item with the last persisted message from MongoDB (already translated at persistence), "
+        "overwriting the timestamp when a newer persisted message exists. When the requested state is 'derived', "
+        "only chats tied to the current user's assigned interactions are included. WAHA calls use an ID filter when possible; "
+        "if WAHA is unavailable, a DB-based fallback is used to construct minimal items."
     ),
     responses={
         200: {
-            "description": "Vista general obtenida exitosamente",
+            "description": "Chat overview retrieved successfully",
             "content": {
                 "application/json": {
                     "example": {
@@ -116,10 +118,19 @@ async def clear_chat_cache(
                                 {
                                     "id": "5491234567890@c.us",
                                     "name": "Juan Pérez",
+                                    "type": "individual",
+                                    "timestamp": 1705314600,
                                     "unread_count": 3,
-                                    "last_message_time": "2024-01-15T10:30:00Z",
-                                    "is_group": False,
-                                    "is_archived": False,
+                                    "archived": False,
+                                    "pinned": False,
+                                    "last_message": {
+                                        "id": "ABCD1234",
+                                        "timestamp": 1705314600,
+                                        "from_me": False,
+                                        "type": "text",
+                                        "body": "Mensaje traducido persistido",
+                                        "ack": "READ",
+                                    },
                                     "interaction_id": "665f1a2b3c4d5e6f7a8b9c0d",
                                 }
                             ],
@@ -129,25 +140,33 @@ async def clear_chat_cache(
                 }
             },
         },
-        503: {"description": "Servicio WAHA no disponible", "model": ErrorResponse},
+        503: {"description": "WAHA service unavailable", "model": ErrorResponse},
         504: {
-            "description": "Timeout en comunicación con WAHA",
+            "description": "Timeout in communication with WAHA",
             "model": ErrorResponse,
         },
     },
 )
 async def get_chats_overview(
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=10, ge=1, le=100, description="Maximum number of items"),
     offset: int = Query(default=0, ge=0),
     state: Optional[str] = Query(
         default="pending",
-        description="Filtro de estado: 'pending' o 'derived' (solo propias en 'derived')",
+        description="State filter: 'pending' or 'derived' (only assigned interactions in 'derived')",
     ),
     waha_client: WAHAClient = Depends(get_waha_dependency),
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    Obtiene vista general de chats optimizada
+    Get an optimized chats overview enriched with the last persisted message.
+
+    - Fetches chat metadata from WAHA.
+    - Builds an ID filter from interactions depending on 'state':
+      - 'pending': all pending interactions in DB.
+      - 'derived': only interactions assigned to the current user.
+    - Enriches each chat with `last_message` from MongoDB (translated at persistence) and updates `timestamp` when newer.
+    - Applies a DB-based fallback when WAHA is unavailable or incomplete.
+    - Caches results for 300 seconds with a key sensitive to filters.
     """
     try:
         # Build ID filter from interactions based on requested state
