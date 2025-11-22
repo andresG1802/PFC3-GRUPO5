@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
-from ..api.envs import WAHA_API_KEY
+from ..api.envs import DEBUG, WAHA_API_KEY
 from ..api.models.chats import ChatType, MessageAck, MessageType
 from ..utils.logging_config import LoggerMixin
 
@@ -853,10 +853,8 @@ async def get_waha_client() -> WAHAClient:
     global _waha_client
 
     if _waha_client is None:
-        # Intentar primero Docker (red interna), luego localhost, con ping rápido
         candidates = [
-            ("http://waha:8000", "Docker"),
-            ("http://localhost:3000", "localhost"),
+            ("http://waha:8000", "Docker") if DEBUG else ("http://waha:3000", "Docker"),
         ]
 
         for base_url, label in candidates:
@@ -866,7 +864,7 @@ async def get_waha_client() -> WAHAClient:
                 break
 
         if _waha_client is None:
-            logger.error("WAHA no disponible en 'waha:8000' ni 'localhost:3000'")
+            logger.error("WAHA no disponible en 'waha:8000' ni 'waha:3000'")
             raise WAHAConnectionError("No se pudo establecer conexión con WAHA")
 
     return _waha_client
