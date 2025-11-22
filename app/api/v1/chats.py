@@ -269,6 +269,12 @@ async def get_chats_overview(
             except Exception:
                 pass
 
+        # Exclude blocked chat id from overview results
+        try:
+            raw_chats = [c for c in raw_chats if str(c.get("id", "")).strip() != "0@c.us"]
+        except Exception:
+            pass
+
         # Crear objetos ChatOverview y enriquecer con interaction_id
         overview_chats = []
         for raw_chat in raw_chats:
@@ -288,6 +294,9 @@ async def get_chats_overview(
                 }
                 chat_obj = ChatOverview(**overview_data)
                 chat_dict = chat_obj.dict()
+                # Skip blocked chat id from overview
+                if str(chat_dict.get("id", "")).strip() == "0@c.us":
+                    continue
                 # Añadir _id de interacción si existe
                 interaction_id = interaction_id_map.get(chat_dict.get("id"))
                 if interaction_id:
@@ -323,6 +332,9 @@ async def get_chats_overview(
                     inter_index = {}
 
                 for mid in missing_ids:
+                    # Skip blocked chat id from fallback
+                    if str(mid).strip() == "0@c.us":
+                        continue
                     it = inter_index.get(mid, {})
                     # Construir datos mínimos
                     minimal = {
@@ -439,13 +451,17 @@ async def get_chat_by_id(
         if interaction:
             chat_id_ref = (interaction.get("chat_id") or "").strip()
             phone_ref = (interaction.get("phone") or "").strip()
-            if chat_id_ref:
+            # Evitar incluir el chat bloqueado
+            if chat_id_ref and chat_id_ref != "0@c.us":
                 candidates.append(chat_id_ref)
-            if phone_ref:
+            if phone_ref and phone_ref != "0@c.us":
                 candidates.append(phone_ref)
 
         # Intentar obtener mensajes usando la primera clave válida que exista en DB
         for candidate in candidates:
+            # Ignorar explícitamente el chat bloqueado en lectura
+            if isinstance(candidate, str) and candidate.strip() == "0@c.us":
+                continue
             chat_exists = ChatModel.get_chat(candidate)
             if chat_exists:
                 data = ChatModel.get_messages(candidate, limit, offset)
@@ -613,9 +629,9 @@ async def stream_chat_by_interaction(
         channel_ids = set()
         # Include interaction_id defensively, although webhooks publish by chat_id
         channel_ids.add(interaction_id)
-        if chat_id_ref:
+        if chat_id_ref and chat_id_ref != "0@c.us":
             channel_ids.add(chat_id_ref)
-        if phone_ref:
+        if phone_ref and phone_ref != "0@c.us":
             channel_ids.add(phone_ref)
 
         if not channel_ids:
@@ -749,7 +765,8 @@ async def stream_assigned_interactions(
             elif phone_ref and ChatModel.get_chat(phone_ref):
                 candidate = phone_ref
 
-            if candidate:
+            # Skip blocked chat id
+            if candidate and candidate != "0@c.us":
                 channel_ids.add(candidate)
 
         if not channel_ids:
@@ -790,6 +807,9 @@ async def stream_assigned_interactions(
                                 "timestamp", 0
                             ),
                         }
+                        # Skip advisor-originated messages when 'from' is null
+                        if notification.get("type") == "message" and notification.get("from") is None:
+                            continue
                         yield f"data: {json.dumps(notification)}\n\n".encode("utf-8")
 
                     now = asyncio.get_event_loop().time()
@@ -1088,6 +1108,13 @@ async def send_message(
     """
     try:
         logger.info(f"Enviando mensaje tipo '{message_request.type}' a chat: {chat_id}")
+
+        # Block interactions with the special chat id
+        if isinstance(chat_id, str) and chat_id.strip() == "0@c.us":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acceso denegado: el chat '0@c.us' está bloqueado para interacción",
+            )
 
         # Autorización: solo el asesor asignado puede enviar mensajes al chat/interacción
         interaction = None

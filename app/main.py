@@ -4,7 +4,7 @@ import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL
+from .api.envs.env import WAHA_BACKEND_WEBHOOK_URL, DEBUG
 from .api.v1.auth import router as auth_router
 from .api.v1.chats import router as chats_router
 from .api.v1.health import router as health_router
@@ -117,7 +117,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitingMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, especificar dominios permitidos
+    allow_origins=["*"] if DEBUG else ["https://aru-link.com", "https://www.aru-link.com", "https://dash.aru-link.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

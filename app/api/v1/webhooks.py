@@ -43,6 +43,10 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
 
         if event_type == "message":
             chat_id = event_data.get("from")
+            # Ignore blocked chat id to prevent persistence and SSE publishing
+            if isinstance(chat_id, str) and chat_id.strip() == "0@c.us":
+                logger.info("Ignoring incoming message for blocked chat_id '0@c.us'")
+                return
             if chat_id:
                 interaction = None
                 is_derived = False

@@ -207,11 +207,14 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
                 chat_id = (it.get("chat_id") or "").strip()
                 mongo_id = it.get("_id")
                 if phone:
-                    ids_filter_set.add(phone)
+                    # Skip blocked chat id
+                    if phone != "0@c.us":
+                        ids_filter_set.add(phone)
                     if mongo_id:
                         interaction_id_map[phone] = str(mongo_id)
                 elif chat_id and "@" in chat_id:
-                    ids_filter_set.add(chat_id)
+                    if chat_id != "0@c.us":
+                        ids_filter_set.add(chat_id)
                     if mongo_id:
                         interaction_id_map[chat_id] = str(mongo_id)
         except Exception:
@@ -248,6 +251,9 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
                 }
                 chat_obj = ChatOverview(**overview_data)
                 chat_dict = chat_obj.dict()
+                # Skip blocked chat id from overview cache prewarm
+                if str(chat_dict.get("id", "")).strip() == "0@c.us":
+                    continue
                 interaction_id = interaction_id_map.get(chat_dict.get("id"))
                 if interaction_id:
                     chat_dict["interaction_id"] = interaction_id
