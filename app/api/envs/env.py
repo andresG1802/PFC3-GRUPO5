@@ -65,8 +65,7 @@ class Settings(BaseSettings):
         default="0.0.0.0", description="Host donde se ejecutará la aplicación"
     )
 
-    port: int = Field(
-        default=8000,
+    api_port: int = Field(
         ge=1,
         le=65535,
         description="Puerto donde se ejecutará la aplicación",
@@ -133,7 +132,7 @@ WAHA_BACKEND_WEBHOOK_URL = settings.waha_backend_webhook_url
 
 DEBUG = settings.debug
 HOST = settings.host
-PORT = settings.port
+API_PORT = settings.api_port
 
 JWT_SECRET_KEY = settings.jwt_secret_key
 JWT_ALGORITHM = settings.jwt_algorithm
