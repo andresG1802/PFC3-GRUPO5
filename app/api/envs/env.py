@@ -104,14 +104,14 @@ class Settings(BaseSettings):
             raise ValueError("El valor de debug debe ser booleano")
         return v
 
-    @field_validator("port")
+    @field_validator("api_port")
     @classmethod
-    def validate_port(cls, v):
-        """Valida el valor de port para asegurarse de que esté en el rango válido."""
+    def validate_api_port(cls, v):
+        """Valida el valor de api_port para asegurarse de que esté en el rango válido."""
         if not (1 <= v <= 65535):
-            raise ValueError("El valor de port debe estar entre 1 y 65535")
+            raise ValueError("El valor de api_port debe estar entre 1 y 65535")
         if not isinstance(v, int):
-            raise ValueError("El valor de port debe ser un entero")
+            raise ValueError("El valor de api_port debe ser un entero")
         return v
 
 
