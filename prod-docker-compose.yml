@@ -114,7 +114,7 @@ services:
 
   backend:
     container_name: afapa-backend
-    image: afapa-backend:main
+    image: arulink/afapa-backend:main
     depends_on:
       db:
         condition: service_healthy
