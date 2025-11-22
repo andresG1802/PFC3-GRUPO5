@@ -73,9 +73,9 @@ app = FastAPI(
     description="API Backend para Aru-Link",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url="/docs" if DEBUG else None,
+    redoc_url="/redoc" if DEBUG else None,
+    openapi_url="/openapi.json" if DEBUG else None,
     contact={"name": "ARU-LINK Team", "email": "support@aru-link.com"},
     servers=[
         {"url": "http://localhost:8000", "description": "Servidor de desarrollo"},
