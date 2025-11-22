@@ -107,12 +107,12 @@ app.include_router(webhooks_router, prefix="/api/v1/webhooks")
 if __name__ == "__main__":
     import uvicorn
 
-    from .api.envs import HOST, API_PORT
+    from .api.envs import HOST
 
     uvicorn.run(
         "app.main:app",
         host=HOST,
-        port=API_PORT,
+        port=8000,
         log_level="info",
         server_header=False,
         date_header=False,
