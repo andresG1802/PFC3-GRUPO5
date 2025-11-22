@@ -14,7 +14,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api import envs
 
-from ...database.models import AsesorModel, ChatModel, InteractionModel
+from ...database.models import ChatModel, InteractionModel
 from ...services.cache import cache_key_for_overview, get_cache
 from ...services.waha_client import (WAHAClient, WAHAConnectionError,
                                      WAHANotFoundError, WAHATimeoutError,
@@ -139,6 +139,10 @@ async def clear_chat_cache(
 async def get_chats_overview(
     limit: int = Query(default=10, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    state: Optional[str] = Query(
+        default="pending",
+        description="Filtro de estado: 'pending' o 'derived' (solo propias en 'derived')",
+    ),
     waha_client: WAHAClient = Depends(get_waha_dependency),
     current_user: dict = Depends(get_current_user),
 ) -> Dict[str, Any]:
@@ -146,19 +150,35 @@ async def get_chats_overview(
     Obtiene vista general de chats optimizada
     """
     try:
-        # Construir filtro de IDs desde interacciones (usar 'phone') y mapear _id
+        # Build ID filter from interactions based on requested state
         ids_filter_set = set()
         interaction_id_map: dict[str, str] = {}
         interactions: list[dict] = []
         try:
-            total_interactions = InteractionModel.count_all(state="pending")
-            interactions = (
-                InteractionModel.find_all(
-                    skip=0, limit=total_interactions, state="pending"
+            filter_state = (state or "pending").strip().lower()
+            if filter_state not in {"pending", "derived"}:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Estado inválido: use 'pending' o 'derived'",
                 )
-                if total_interactions and total_interactions > 0
-                else []
-            )
+
+            if filter_state == "pending":
+                total_interactions = InteractionModel.count_all(state="pending")
+                interactions = (
+                    InteractionModel.find_all(
+                        skip=0, limit=total_interactions, state="pending"
+                    )
+                    if total_interactions and total_interactions > 0
+                    else []
+                )
+            else:  # derived (only those assigned to current user)
+                asesor_id = str(current_user.get("_id", "")).strip()
+                assigned = InteractionModel.find_by_asesor(asesor_id) or []
+                interactions = [
+                    i
+                    for i in assigned
+                    if (i or {}).get("state") == InteractionState.DERIVED.value
+                ]
             for it in interactions:
                 phone = (it.get("phone") or "").strip()
                 chat_id = (it.get("chat_id") or "").strip()
@@ -221,25 +241,27 @@ async def get_chats_overview(
                         "message": "Overview de chats obtenido desde cache",
                     }
             else:
-                logger.info(
-                    f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
-                )
-                return {
-                    "success": True,
-                    "data": {
-                        "summary": {
-                            "total_chats": len(cached_result),
-                            "limit": limit,
-                            "offset": offset,
+                # Solo devolver cache sin filtro cuando el estado no es 'derived'
+                if (state or "pending").strip().lower() != "derived":
+                    logger.info(
+                        f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
+                    )
+                    return {
+                        "success": True,
+                        "data": {
+                            "summary": {
+                                "total_chats": len(cached_result),
+                                "limit": limit,
+                                "offset": offset,
+                            },
+                            "chats": cached_result,
                         },
-                        "chats": cached_result,
-                    },
-                    "message": "Overview de chats obtenido desde cache",
-                }
+                        "message": "Overview de chats obtenido desde cache",
+                    }
 
         logger.info(f"Obteniendo chats overview - limit: {limit}, offset: {offset}")
 
-        # Intentar obtener overview optimizado con filtro por ids; fallback a overview sin filtro o a chats normales
+        # Intentar obtener overview optimizado con filtro por ids; para 'derived' sin ids, no solicitar overview global
         raw_chats = []
         try:
             if ids_filter:
@@ -247,9 +269,13 @@ async def get_chats_overview(
                     limit=limit, offset=offset, ids=ids_filter
                 )
             else:
-                raw_chats = await waha_client.get_chats_overview(
-                    limit=limit, offset=offset
-                )
+                # Si el filtro es 'derived' y no hay ids, devolvemos vacío sin consultar WAHA
+                if (state or "pending").strip().lower() == "derived":
+                    raw_chats = []
+                else:
+                    raw_chats = await waha_client.get_chats_overview(
+                        limit=limit, offset=offset
+                    )
         except Exception:
             logger.warning("Overview no disponible, intentando fallback de chats")
             try:
@@ -271,7 +297,9 @@ async def get_chats_overview(
 
         # Exclude blocked chat id from overview results
         try:
-            raw_chats = [c for c in raw_chats if str(c.get("id", "")).strip() != "0@c.us"]
+            raw_chats = [
+                c for c in raw_chats if str(c.get("id", "")).strip() != "0@c.us"
+            ]
         except Exception:
             pass
 
@@ -292,8 +320,28 @@ async def get_chats_overview(
                     "archived": raw_chat.get("archived", False),
                     "pinned": raw_chat.get("pinned", False),
                 }
+
+                # Enriquecer con último mensaje desde MongoDB (ya traducido en persistencia)
+                try:
+                    db_chat = (
+                        ChatModel.get_chat(overview_data["id"])
+                        if overview_data.get("id")
+                        else None
+                    )
+                    if db_chat:
+                        # Sobrescribir timestamp si MongoDB tiene último mensaje
+                        if db_chat.get("timestamp"):
+                            overview_data["timestamp"] = db_chat.get("timestamp")
+                        # Añadir último mensaje si existe en DB
+                        last_msg = db_chat.get("last_message")
+                        if last_msg:
+                            overview_data["last_message"] = last_msg
+                except Exception:
+                    # No bloquear overview si falla la lectura de DB
+                    pass
+
                 chat_obj = ChatOverview(**overview_data)
-                chat_dict = chat_obj.dict()
+                chat_dict = chat_obj.model_dump()
                 # Skip blocked chat id from overview
                 if str(chat_dict.get("id", "")).strip() == "0@c.us":
                     continue
@@ -346,6 +394,18 @@ async def get_chats_overview(
                         "archived": False,
                         "pinned": False,
                     }
+
+                    # Enriquecer fallback con último mensaje almacenado en MongoDB
+                    try:
+                        db_chat = ChatModel.get_chat(mid)
+                        if db_chat:
+                            if db_chat.get("timestamp"):
+                                minimal["timestamp"] = db_chat.get("timestamp")
+                            last_msg = db_chat.get("last_message")
+                            if last_msg:
+                                minimal["last_message"] = last_msg
+                    except Exception:
+                        pass
                     try:
                         chat_obj = ChatOverview(**minimal)
                         chat_dict = chat_obj.dict()
@@ -667,6 +727,7 @@ async def stream_chat_by_interaction(
                                     event_type = str(
                                         payload_obj.get("type") or "message"
                                     )
+
                             except Exception:
                                 payload_obj = None
                         # Build final JSON string
@@ -806,10 +867,17 @@ async def stream_assigned_interactions(
                             "timestamp": (payload.get("message") or {}).get(
                                 "timestamp", 0
                             ),
+                            "from_me": bool(
+                                (payload.get("message") or {}).get("from_me", False)
+                            ),
                         }
                         # Skip advisor-originated messages when 'from' is null
-                        if notification.get("type") == "message" and notification.get("from") is None:
+                        if (
+                            notification.get("type") == "message"
+                            and notification.get("from") is None
+                        ):
                             continue
+
                         yield f"data: {json.dumps(notification)}\n\n".encode("utf-8")
 
                     now = asyncio.get_event_loop().time()
