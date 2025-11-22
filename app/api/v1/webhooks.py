@@ -71,7 +71,7 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     interaction = None
                     is_derived = False
 
-                # Solo invalidar cache y persistir/publicar si hay interacción DERIVED
+                # Solo invalidar cache y publicar si hay interacción DERIVED
                 if is_derived:
                     try:
                         cache.delete_pattern(f"messages:{chat_id}:*")
@@ -80,13 +80,17 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     except Exception:
                         pass
 
-                    # Persistir mensaje entrante en MongoDB (esto crea el chat si no existe)
+                    # Translation stage (placeholder)
+                    # TODO: Translate the incoming message body before persistence/publish
+                    msg_body = event_data.get("body")
+
+                    # Persist translated/normalized message BEFORE publishing to SSE
                     try:
                         ChatModel.add_message(
                             chat_id,
                             {
                                 "id": event_data.get("id"),
-                                "body": event_data.get("body"),
+                                "body": msg_body,  # translated body goes here when implemented
                                 "timestamp": event_data.get("timestamp", 0),
                                 "type": event_data.get("type", "text"),
                                 "from_me": bool(event_data.get("fromMe", False)),
@@ -111,7 +115,7 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                             ),
                             "message": {
                                 "id": event_data.get("id"),
-                                "body": event_data.get("body"),
+                                "body": msg_body,
                                 "timestamp": event_data.get("timestamp", 0),
                                 "type": event_data.get("type", "text"),
                                 "from_me": bool(event_data.get("fromMe", False)),

@@ -320,8 +320,28 @@ async def get_chats_overview(
                     "archived": raw_chat.get("archived", False),
                     "pinned": raw_chat.get("pinned", False),
                 }
+
+                # Enriquecer con último mensaje desde MongoDB (ya traducido en persistencia)
+                try:
+                    db_chat = (
+                        ChatModel.get_chat(overview_data["id"])
+                        if overview_data.get("id")
+                        else None
+                    )
+                    if db_chat:
+                        # Sobrescribir timestamp si MongoDB tiene último mensaje
+                        if db_chat.get("timestamp"):
+                            overview_data["timestamp"] = db_chat.get("timestamp")
+                        # Añadir último mensaje si existe en DB
+                        last_msg = db_chat.get("last_message")
+                        if last_msg:
+                            overview_data["last_message"] = last_msg
+                except Exception:
+                    # No bloquear overview si falla la lectura de DB
+                    pass
+
                 chat_obj = ChatOverview(**overview_data)
-                chat_dict = chat_obj.dict()
+                chat_dict = chat_obj.model_dump()
                 # Skip blocked chat id from overview
                 if str(chat_dict.get("id", "")).strip() == "0@c.us":
                     continue
@@ -374,6 +394,18 @@ async def get_chats_overview(
                         "archived": False,
                         "pinned": False,
                     }
+
+                    # Enriquecer fallback con último mensaje almacenado en MongoDB
+                    try:
+                        db_chat = ChatModel.get_chat(mid)
+                        if db_chat:
+                            if db_chat.get("timestamp"):
+                                minimal["timestamp"] = db_chat.get("timestamp")
+                            last_msg = db_chat.get("last_message")
+                            if last_msg:
+                                minimal["last_message"] = last_msg
+                    except Exception:
+                        pass
                     try:
                         chat_obj = ChatOverview(**minimal)
                         chat_dict = chat_obj.dict()
@@ -695,6 +727,7 @@ async def stream_chat_by_interaction(
                                     event_type = str(
                                         payload_obj.get("type") or "message"
                                     )
+
                             except Exception:
                                 payload_obj = None
                         # Build final JSON string
@@ -834,6 +867,9 @@ async def stream_assigned_interactions(
                             "timestamp": (payload.get("message") or {}).get(
                                 "timestamp", 0
                             ),
+                            "from_me": bool(
+                                (payload.get("message") or {}).get("from_me", False)
+                            ),
                         }
                         # Skip advisor-originated messages when 'from' is null
                         if (
@@ -841,6 +877,7 @@ async def stream_assigned_interactions(
                             and notification.get("from") is None
                         ):
                             continue
+
                         yield f"data: {json.dumps(notification)}\n\n".encode("utf-8")
 
                     now = asyncio.get_event_loop().time()
