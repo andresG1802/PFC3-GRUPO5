@@ -92,10 +92,24 @@ async def lifespan(app: FastAPI):
         await waha_client.configure_webhooks([backend_webhook])
         logger.info("WAHA webhook configured: backend only")
 
-        # Start WAHA 'default' session once ready
+        # Start WAHA 'default' session only once if not already active
         try:
-            await waha_client.start_session()
-            logger.info("WAHA session 'default' started")
+            status_payload = await waha_client.get_session_status()
+            current_status = str(status_payload.get("status", "unknown")).lower()
+            active_statuses = {
+                "started",
+                "connected",
+                "working",
+                "initialized",
+                "ready",
+            }
+            if current_status in active_statuses:
+                logger.info(
+                    f"WAHA session 'default' already active (status={current_status}); skipping start"
+                )
+            else:
+                await waha_client.start_session()
+                logger.info("WAHA session 'default' started")
         except Exception as e:
             logger.error(f"Failed to start WAHA session 'default': {e}")
     except Exception as e:
