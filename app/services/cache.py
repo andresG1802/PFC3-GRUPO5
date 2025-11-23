@@ -88,7 +88,7 @@ class RedisCache:
 
         # Usar hash para claves muy largas
         if len(key_str) > 100:
-            key_str = hashlib.md5(key_str.encode()).hexdigest()
+            key_str = hashlib.sha256(key_str.encode()).hexdigest()
 
         return f"{self.key_prefix}{key_str}"
 
@@ -379,7 +379,7 @@ def cache_key_for_overview(
     if ids:
         try:
             ids_sorted = sorted(ids)
-            ids_hash = hashlib.md5(",".join(ids_sorted).encode()).hexdigest()[:8]
+            ids_hash = hashlib.sha256(",".join(ids_sorted).encode()).hexdigest()[:8]
             return f"overview:{limit}:{offset}:{ids_hash}"
         except Exception:
             return f"overview:{limit}:{offset}:ids"

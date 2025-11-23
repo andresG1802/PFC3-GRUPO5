@@ -217,7 +217,10 @@ async def get_chats_overview(
                     if mongo_id:
                         interaction_id_map[chat_id] = str(mongo_id)
                     interaction_by_key[chat_id] = it
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Error al construir filtro de IDs de interacciones: {e}. Se usará listado mínimo desde DB"
+            )
             ids_filter_set = set()
 
         ids_filter = list(ids_filter_set)
@@ -239,6 +242,9 @@ async def get_chats_overview(
                     }
                     missing_ids = set(ids_filter) - cached_ids
                 except Exception:
+                    logger.warning(
+                        f"Error al validar desalineación de cache overview con DB: {e}. Se usará listado mínimo desde DB"
+                    )
                     missing_ids = set(ids_filter)  # Fuerza invalidación si falla
 
                 if missing_ids or (len(cached_result) == 0 and len(ids_filter) > 0):
@@ -249,6 +255,7 @@ async def get_chats_overview(
                     try:
                         cache.delete(cache_key)
                     except Exception:
+                        logger.error(f"Error al invalidar cache overview: {cache_key}")
                         pass
                 else:
                     logger.info(
@@ -308,7 +315,7 @@ async def get_chats_overview(
                 raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
             except Exception as e:
                 # Si también falla, continuamos con lista vacía para construir fallback desde DB
-                logger.error(
+                logger.warning(
                     f"Fallback de chats falló: {e}. Se usará listado mínimo desde DB"
                 )
                 raw_chats = []
@@ -319,6 +326,9 @@ async def get_chats_overview(
             try:
                 raw_chats = [c for c in raw_chats if c.get("id") in allowed_ids]
             except Exception:
+                logger.warning(
+                    f"Error al filtrar chats por ID: {e}. Se usará listado mínimo desde DB"
+                )
                 pass
 
         # Exclude blocked chat id from overview results
@@ -327,6 +337,9 @@ async def get_chats_overview(
                 c for c in raw_chats if str(c.get("id", "")).strip() != "0@c.us"
             ]
         except Exception:
+            logger.warning(
+                f"Error al filtrar chat bloqueado: {e}. Se usará listado mínimo desde DB"
+            )
             pass
 
         # Crear objetos ChatOverview y enriquecer con interaction_id
@@ -364,6 +377,9 @@ async def get_chats_overview(
                             overview_data["last_message"] = last_msg
                 except Exception:
                     # No bloquear overview si falla la lectura de DB
+                    logger.warning(
+                        f"Error al leer último mensaje de chat {overview_data.get('id', 'unknown')} desde DB: {e}"
+                    )
                     pass
 
                 chat_obj = ChatOverview(**overview_data)
@@ -388,6 +404,9 @@ async def get_chats_overview(
                             it.get("timeline", []), it.get("route")
                         )
                 except Exception:
+                    logger.warning(
+                        f"Error al generar summary para chat {raw_chat.get('id', 'unknown')}: {e}"
+                    )
                     pass
                 overview_chats.append(chat_dict)
             except Exception as e:
@@ -402,7 +421,10 @@ async def get_chats_overview(
                 present_ids = {c.get("id") for c in overview_chats if c.get("id")}
                 expected_ids = set(ids_filter)
                 missing_ids = expected_ids - present_ids
-            except Exception:
+            except Exception as e:
+                logger.warning(
+                    f"Error al comparar IDs esperados con IDs presentes: {e}"
+                )
                 missing_ids = set()
 
             if missing_ids:
@@ -416,7 +438,8 @@ async def get_chats_overview(
                         key = (it.get("phone") or it.get("chat_id") or "").strip()
                         if key:
                             inter_index[key] = it
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"Error indexando interacciones para fallback: {e}")
                     inter_index = {}
 
                 for mid in missing_ids:
@@ -444,7 +467,10 @@ async def get_chats_overview(
                             last_msg = db_chat.get("last_message")
                             if last_msg:
                                 minimal["last_message"] = last_msg
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(
+                            f"Error al leer último mensaje de chat {mid} desde DB: {e}"
+                        )
                         pass
                     try:
                         chat_obj = ChatOverview(**minimal)
@@ -457,7 +483,10 @@ async def get_chats_overview(
                             chat_dict["summary"] = _build_interaction_summary(
                                 it.get("timeline", []), it.get("route")
                             )
-                        except Exception:
+                        except Exception as e:
+                            logger.warning(
+                                f"Error al generar summary para chat {mid}: {e}"
+                            )
                             pass
                         overview_chats.append(chat_dict)
                     except Exception as e:
@@ -466,7 +495,8 @@ async def get_chats_overview(
         # Aplicar paginación hardcodeada por si el backend de WAHA no respeta límites
         try:
             overview_chats = overview_chats[offset : offset + limit]
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Error paginando chats overview: {e}")
             pass
 
         # Guardar en cache
@@ -655,7 +685,7 @@ async def get_chat_by_id(
             )
 
         # Ninguna clave de chat válida encontrada
-        logger.warning(
+        logger.error(
             f"Chat no encontrado para interaction_id='{interaction_id}' (candidatos: {candidates})"
         )
         raise HTTPException(
@@ -664,6 +694,9 @@ async def get_chat_by_id(
         )
 
     except HTTPException:
+        logger.error(
+            f"HTTPException obteniendo mensajes para interaction_id {interaction_id}: {e}"
+        )
         raise
     except Exception as e:
         logger.error(
@@ -775,7 +808,10 @@ async def stream_chat_by_interaction(
                                         payload_obj.get("type") or "message"
                                     )
 
-                            except Exception:
+                            except Exception as e:
+                                logger.warning(
+                                    f"Error parseando mensaje JSON para interaction_id {interaction_id}: {e}"
+                                )
                                 payload_obj = None
                         # Build final JSON string
                         final_payload = (
@@ -939,7 +975,10 @@ async def stream_assigned_interactions(
                 try:
                     pubsub.unsubscribe(*channel_names)
                     pubsub.close()
-                except Exception:
+                except Exception as e:
+                    logger.warning(
+                        f"Error al cerrar pubsub para SSE agregado para asesor {current_user.get('_id')}: {e}"
+                    )
                     pass
 
         return StreamingResponse(
@@ -951,6 +990,9 @@ async def stream_assigned_interactions(
             },
         )
     except HTTPException:
+        logger.warning(
+            f"HTTPException al iniciar SSE agregado para asesor {current_user.get('_id')}: {e}"
+        )
         raise
     except Exception as e:
         logger.error(
@@ -1017,7 +1059,10 @@ async def update_interaction_state(
             current_count = InteractionModel.count_by_asesor(
                 asesor_id, state=InteractionState.DERIVED.value
             )
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Error al contar interacciones derivadas para asesor {asesor_id}: {e}. Se usará contador mínimo"
+            )
             current_count = 0
         if current_count >= MAX_DERIVED_INTERACTIONS_PER_ADVISOR:
             raise HTTPException(
@@ -1044,7 +1089,10 @@ async def update_interaction_state(
         try:
             cache = get_cache()
             cache.delete_pattern("overview:*")
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Error al invalidar cache overview después de actualizar interacción {interaction_id}: {e}"
+            )
             pass
 
         return {
@@ -1055,10 +1103,13 @@ async def update_interaction_state(
         }
 
     except HTTPException:
+        logger.warning(
+            f"HTTPException al actualizar estado de interacción {interaction_id}: {e}"
+        )
         raise
     except Exception as e:
         logger.error(
-            f"Unexpected error updating interaction state {interaction_id}: {e}"
+            f"Error inesperado al actualizar estado de interacción {interaction_id}: {e}"
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1242,7 +1293,10 @@ async def send_message(
                 interaction = InteractionModel.find_by_chat_id(chat_id)
                 if not interaction:
                     interaction = InteractionModel.find_by_phone(chat_id)
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                f"Error al buscar interacción para chat '{chat_id}': {e}. Se usará None"
+            )
             interaction = None
 
         if not interaction:

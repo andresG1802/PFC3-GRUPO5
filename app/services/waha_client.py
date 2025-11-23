@@ -66,6 +66,7 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
                         logger.error(f"Todos los intentos fallaron: {e}")
                 except Exception as e:
                     # No reintentar para otros tipos de errores
+                    logger.error(f"Error inesperado en intento {attempt + 1}: {e}")
                     raise e
             raise last_exception
 
@@ -378,9 +379,15 @@ class WAHAClient(LoggerMixin):
                             try:
                                 return MessageAck(ack_value.upper())
                             except Exception:
+                                logger.warning(
+                                    f"Error mapeando ACK para mensaje {msg.get('id', '')}: {ack_value}"
+                                )
                                 return MessageAck.PENDING
                         return MessageAck.PENDING
                     except Exception:
+                        logger.error(
+                            f"Error normalizando ACK para mensaje {msg.get('id', '')}: {e}"
+                        )
                         return MessageAck.PENDING
 
                 last_message = {
@@ -601,6 +608,7 @@ class WAHAClient(LoggerMixin):
                         "linkPreviewHighQuality"
                     )
         except Exception:
+            logger.error(f"Error mapeando parámetros para sendText: {kwargs}")
             pass
 
         logger.debug(f"Fallback sendText: {url} con payload: {payload}")
@@ -819,6 +827,9 @@ class WAHAClient(LoggerMixin):
                     return {"status": status, "message": "Session already running"}
             except Exception:
                 # If the pre-check fails, continue with the start attempt
+                logger.warning(
+                    f"Error pre-chequeando estado de sesión '{target_session}'"
+                )
                 pass
 
             async with httpx.AsyncClient(
@@ -832,6 +843,9 @@ class WAHAClient(LoggerMixin):
                     try:
                         payload = response.json()
                     except Exception:
+                        logger.warning(
+                            f"Error parseando respuesta JSON para pre-chequeo de sesión '{target_session}'"
+                        )
                         payload = {"message": response.text}
                     msg = str(payload.get("message", "")).lower()
                     if "already started" in msg:
@@ -873,6 +887,7 @@ async def _quick_ping(base_url: str, session_name: str = "default") -> bool:
             _ = await client.get(url)
             return True
     except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
+        logger.warning(f"Error en ping rápido a WAHA: {e}")
         return False
 
 

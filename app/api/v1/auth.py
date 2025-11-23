@@ -13,6 +13,8 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.utils import get_logger
+
 # Importar modelo de asesor de la base de datos
 from ...database.models import AsesorModel, InteractionModel
 from ...services.cache import cache_key_for_overview, get_cache
@@ -28,6 +30,7 @@ from ..models.chats import ChatOverview
 router = APIRouter(tags=["Autenticación"])
 security = HTTPBearer()
 
+logger = get_logger(__name__)
 
 # Configuración de hashing de contraseñas
 PBKDF2_ITERATIONS = 120000
@@ -174,6 +177,7 @@ async def login(login_data: LoginRequest):
         asyncio.create_task(_prewarm_overview_cache(limit=10, offset=0))
     except Exception:
         # Never block or fail login due to prewarming issues
+        logger.warning("Ocurrió un error al precalcular el cache de chats")
         pass
 
     return TokenResponse(
@@ -218,6 +222,7 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
                     if mongo_id:
                         interaction_id_map[chat_id] = str(mongo_id)
         except Exception:
+            logger.warning("No se pudieron obtener las interacciones pendientes")
             ids_filter_set = set()
 
         ids_filter = list(ids_filter_set)
@@ -232,6 +237,7 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
             try:
                 raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
             except Exception:
+                logger.warning("No se pudieron obtener los chats")
                 raw_chats = []
 
         # Normalize into ChatOverview dicts and attach interaction_id when present
@@ -259,12 +265,14 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
                     chat_dict["interaction_id"] = interaction_id
                 overview_chats.append(chat_dict)
             except Exception:
+                logger.warning(f"Error procesando chat {raw_chat.get('id', '')}")
                 continue
 
         # Apply simple pagination slice in case backend ignores params
         try:
             overview_chats = overview_chats[offset : offset + limit]
         except Exception:
+            logger.warning("Error al aplicar paginación al cache de chats")
             pass
 
         cache = get_cache()
@@ -274,6 +282,7 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
         cache.set(cache_key, overview_chats, ttl=300)
     except Exception:
         # Silently ignore errors to avoid affecting login
+        logger.warning("Ocurrió un error al precalcular el cache de chats")
         pass
 
 
