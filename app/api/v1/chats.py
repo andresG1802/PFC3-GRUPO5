@@ -26,13 +26,10 @@ from ..models.chats import (ChatOverview, ErrorResponse, Message,
 from ..models.interactions import InteractionState
 from .auth import get_current_admin, get_current_user
 
-# Logger específico para este módulo
 logger = get_logger(__name__)
 
-# Crear router
 router = APIRouter(tags=["Chats"])
 
-# Límites por defecto
 # Límite máximo de interacciones en estado 'derived' que puede tener un asesor
 MAX_DERIVED_INTERACTIONS_PER_ADVISOR = 20
 
@@ -531,7 +528,11 @@ async def get_chats_overview(
     "/{interaction_id}",
     response_model=MessagesListResponse,
     summary="Get persisted chat messages by interaction",
-    description="Returns persisted messages from MongoDB for the chat associated with the given interaction.",
+    description=(
+        "Returns persisted messages from MongoDB for the chat associated with the given interaction. "
+        "Falls back to empty messages with a human-readable summary when the interaction is 'pending' or 'derived' "
+        "and no chat has been persisted yet (only for the assigned advisor)."
+    ),
     responses={
         200: {"description": "Messages retrieved successfully"},
         404: {"description": "Chat not found"},
@@ -683,6 +684,39 @@ async def get_chat_by_id(
                 summary=summary_message,
                 chat_id=inferred_chat_id,
             )
+
+        # Fallback for 'derived': return empty messages and summary for the assigned advisor
+        # Applies only if the current user is the assigned advisor and no chat has been persisted yet
+        if interaction and interaction.get("state") == "derived":
+            assigned_asesor_id = (interaction or {}).get("asesor_id")
+            current_asesor_id = (
+                str(current_user.get("_id")) if current_user.get("_id") else None
+            )
+            if assigned_asesor_id and assigned_asesor_id == current_asesor_id:
+                # Prefer phone, normalize to WAHA chatId format when missing domain
+                raw_phone = (interaction.get("phone") or "").strip()
+                raw_chat_id = (interaction.get("chat_id") or "").strip()
+                inferred_chat_id = raw_phone or raw_chat_id
+                if inferred_chat_id and "@" not in inferred_chat_id:
+                    inferred_chat_id = f"{inferred_chat_id}@c.us"
+                # Avoid returning blocked chat id
+                if inferred_chat_id == "0@c.us":
+                    inferred_chat_id = None
+                summary_message = _build_interaction_summary(
+                    interaction.get("timeline", []), interaction.get("route")
+                )
+                logger.warning(
+                    "Interacción derived: devolviendo mensajes vacíos y summary "
+                    f"(interaction_id='{interaction_id}')"
+                )
+                return MessagesListResponse(
+                    messages=[],
+                    total=0,
+                    limit=limit,
+                    offset=offset,
+                    summary=summary_message,
+                    chat_id=inferred_chat_id,
+                )
 
         # Ninguna clave de chat válida encontrada
         logger.error(
@@ -1085,7 +1119,25 @@ async def update_interaction_state(
                 detail="Failed to update interaction",
             )
 
-        # Optional: invalidate related caches (overview)
+        # Pre-create an empty chat document for derived interaction
+        try:
+            base_id = (
+                interaction.get("phone") or interaction.get("chat_id") or ""
+            ).strip()
+            inferred_chat_id = None
+            if base_id:
+                inferred_chat_id = base_id if ("@" in base_id) else f"{base_id}@c.us"
+            # Avoid blocked chat id
+            if inferred_chat_id and inferred_chat_id != "0@c.us":
+                ChatModel.upsert_chat(inferred_chat_id, interaction_id)
+                logger.info(
+                    f"Precreated chat document for derived interaction {interaction_id}: {inferred_chat_id}"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Failed to precreate chat document for interaction {interaction_id}: {e}"
+            )
+
         try:
             cache = get_cache()
             cache.delete_pattern("overview:*")
