@@ -104,6 +104,10 @@ class ChatOverview(BaseModel):
     picture_url: Optional[str] = Field(None, description="URL de la imagen del chat")
     archived: Optional[bool] = Field(False, description="Chat archivado")
     pinned: Optional[bool] = Field(False, description="Chat fijado")
+    summary: Optional[str] = Field(
+        None,
+        description="Resumen en lenguaje natural construido desde el timeline y la ruta",
+    )
 
 
 class ChatListResponse(BaseModel):

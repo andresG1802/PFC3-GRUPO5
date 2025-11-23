@@ -101,6 +101,7 @@ async def clear_chat_cache(
     description=(
         "Returns an optimized chats overview. The service queries WAHA for chat metadata and "
         "enriches each item with the last persisted message from MongoDB (already translated at persistence), "
+        "and a human-readable interaction summary built from the timeline and current route. "
         "overwriting the timestamp when a newer persisted message exists. When the requested state is 'derived', "
         "only chats tied to the current user's assigned interactions are included. WAHA calls use an ID filter when possible; "
         "if WAHA is unavailable, a DB-based fallback is used to construct minimal items."
@@ -131,6 +132,7 @@ async def clear_chat_cache(
                                         "body": "Mensaje traducido persistido",
                                         "ack": "READ",
                                     },
+                                    "summary": "Inquiry about sexual abuse; the person is a victim.",
                                     "interaction_id": "665f1a2b3c4d5e6f7a8b9c0d",
                                 }
                             ],
@@ -172,6 +174,7 @@ async def get_chats_overview(
         # Build ID filter from interactions based on requested state
         ids_filter_set = set()
         interaction_id_map: dict[str, str] = {}
+        interaction_by_key: dict[str, dict] = {}
         interactions: list[dict] = []
         try:
             filter_state = (state or "pending").strip().lower()
@@ -206,10 +209,14 @@ async def get_chats_overview(
                     ids_filter_set.add(phone)
                     if mongo_id:
                         interaction_id_map[phone] = str(mongo_id)
+                    interaction_by_key[phone] = it
+                    # WAHA chat format normalization helper: map phone@c.us as well
+                    interaction_by_key[f"{phone}@c.us"] = it
                 elif chat_id and "@" in chat_id:
                     ids_filter_set.add(chat_id)
                     if mongo_id:
                         interaction_id_map[chat_id] = str(mongo_id)
+                    interaction_by_key[chat_id] = it
         except Exception:
             ids_filter_set = set()
 
@@ -368,6 +375,20 @@ async def get_chats_overview(
                 interaction_id = interaction_id_map.get(chat_dict.get("id"))
                 if interaction_id:
                     chat_dict["interaction_id"] = interaction_id
+                # Añadir summary de la interacción si existe
+                try:
+                    key = str(chat_dict.get("id") or "")
+                    it = interaction_by_key.get(key)
+                    if not it and "@" in key:
+                        # Intentar con la parte del teléfono sin dominio
+                        phone_part = key.split("@", 1)[0]
+                        it = interaction_by_key.get(phone_part)
+                    if it:
+                        chat_dict["summary"] = _build_interaction_summary(
+                            it.get("timeline", []), it.get("route")
+                        )
+                except Exception:
+                    pass
                 overview_chats.append(chat_dict)
             except Exception as e:
                 logger.warning(
@@ -431,6 +452,13 @@ async def get_chats_overview(
                         mongo_id = it.get("_id")
                         if mongo_id:
                             chat_dict["interaction_id"] = str(mongo_id)
+                        # Añadir summary si se tiene interacción
+                        try:
+                            chat_dict["summary"] = _build_interaction_summary(
+                                it.get("timeline", []), it.get("route")
+                            )
+                        except Exception:
+                            pass
                         overview_chats.append(chat_dict)
                     except Exception as e:
                         logger.warning(f"Error agregando chat mínimo para {mid}: {e}")
