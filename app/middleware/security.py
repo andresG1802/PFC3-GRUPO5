@@ -68,10 +68,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except Exception as e:
-            logger.error(f"Error in SecurityHeadersMiddleware: {str(e)}")
-
-            # En caso de error, continuar sin los headers de seguridad
+        except Exception:
+            logger.exception("Error in SecurityHeadersMiddleware")
             return await call_next(request)
 
     def _add_security_headers(self, response: Response) -> None:

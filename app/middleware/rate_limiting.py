@@ -59,9 +59,9 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             self.redis_available = True
             logger.info("Conexión a Redis establecida exitosamente")
 
-        except Exception as e:
+        except Exception:
             self.redis_available = False
-            logger.error(f"Error conectando a Redis: {e}")
+            logger.exception("Error conectando a Redis")
             logger.warning(
                 "Rate limiting funcionará en modo degradado (sin persistencia)"
             )
@@ -131,10 +131,11 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except HTTPException:
+        except HTTPException as e:
+            # Re-propagar HTTPException sin alterar el flujo
             raise
-        except Exception as e:
-            logger.error(f"Error en RateLimitingMiddleware: {e}")
+        except Exception:
+            logger.exception("Error en RateLimitingMiddleware")
             # En caso de error, continuar sin rate limiting
             return await call_next(request)
 
@@ -232,8 +233,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
             return not (rpm_exceeded or rph_exceeded), limit_info
 
-        except Exception as e:
-            logger.error(f"Error verificando rate limit: {e}")
+        except Exception:
+            logger.exception("Error verificando rate limit")
             # En caso de error, permitir la request
             return True, {"remaining_rpm": rpm_limit, "remaining_rph": rph_limit}
 
@@ -264,8 +265,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
                 f"Cliente {client_id} bloqueado temporalmente por {self.config.block_duration} minutos"
             )
 
-        except Exception as e:
-            logger.error(f"Error aplicando bloqueo temporal: {e}")
+        except Exception:
+            logger.exception("Error aplicando bloqueo temporal")
 
     async def _is_temporarily_blocked(self, client_id: str) -> bool:
         """
@@ -279,8 +280,8 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
             blocked_info = await self.redis_client.get(block_key)
             return blocked_info is not None
 
-        except Exception as e:
-            logger.error(f"Error verificando bloqueo temporal: {e}")
+        except Exception:
+            logger.exception("Error verificando bloqueo temporal")
             return False
 
     def _add_rate_limit_headers(self, response: Response, limit_info: Dict):

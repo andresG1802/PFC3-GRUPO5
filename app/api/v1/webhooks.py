@@ -29,8 +29,41 @@ def _map_waha_message_type(raw_type: str | None) -> str:
     mapping = {
         "chat": "text",
         "ptt": "voice",
+        # WAHA / WebApp: notificación de plantilla, mapear a texto para compatibilidad
+        "notification_template": "text",
     }
-    return mapping.get(raw_type, raw_type)
+    # Si no está mapeado, degradar a 'text' para no romper validación
+    return mapping.get(raw_type, "text")
+
+
+def _map_waha_ack(ack_value: Any) -> str | None:
+    """Normaliza el ACK de WAHA a los valores permitidos por MessageAck.
+
+    - Acepta enteros (-1..4) o strings.
+    - Fallback a 'PENDING' si el valor es desconocido.
+    """
+    try:
+        if ack_value is None:
+            return None
+        # Numérico según WAHA
+        if isinstance(ack_value, int):
+            mapping = {
+                -1: "ERROR",
+                0: "PENDING",
+                1: "SERVER",
+                2: "DEVICE",
+                3: "READ",
+                4: "PLAYED",
+            }
+            return mapping.get(ack_value, "PENDING")
+        # String: forzar mayúsculas y validar contra el set permitido
+        if isinstance(ack_value, str):
+            val = ack_value.upper()
+            allowed = {"ERROR", "PENDING", "SERVER", "DEVICE", "READ", "PLAYED"}
+            return val if val in allowed else "PENDING"
+        return "PENDING"
+    except Exception:
+        return "PENDING"
 
 
 async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> None:
@@ -225,8 +258,8 @@ async def receive_waha_webhook(
                     "body": payload.get("body"),
                     # WAHA usa camelCase; nuestro modelo acepta alias fromMe
                     "fromMe": payload.get("fromMe"),
-                    # Preferimos ackName (STRING) sobre ack (NUMBER)
-                    "ack": payload.get("ackName") or payload.get("ack"),
+                    # Preferimos ackName (STRING) sobre ack (NUMBER), normalizado
+                    "ack": _map_waha_ack(payload.get("ackName") or payload.get("ack")),
                     "type": _map_waha_message_type(raw_type),
                 }
 

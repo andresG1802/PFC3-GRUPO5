@@ -328,6 +328,9 @@ async def get_chats_overview(
                                     if last_msg:
                                         cd["last_message"] = last_msg
                             except Exception:
+                                logger.warning(
+                                    f"Error al enriquecer cached overview con DB: {e}. Chat={cid}"
+                                )
                                 pass
 
                             # Attach interaction_id
@@ -347,6 +350,9 @@ async def get_chats_overview(
                                         it.get("timeline", []), it.get("route")
                                     )
                             except Exception:
+                                logger.warning(
+                                    f"Error al enriquecer cached overview con interacción: {e}. Chat={cid}"
+                                )
                                 pass
 
                             enriched_cached.append(cd)
@@ -432,6 +438,9 @@ async def get_chats_overview(
                             ]
                         cached_result = enriched_cached
                     except Exception:
+                        logger.warning(
+                            f"Error al enriquecer cached overview con interacción: {e}. Chat={cid}"
+                        )
                         pass
                     return {
                         "success": True,
@@ -884,7 +893,7 @@ async def get_chat_by_id(
             detail="Chat no encontrado",
         )
 
-    except HTTPException:
+    except HTTPException as e:
         logger.error(
             f"HTTPException obteniendo mensajes para interaction_id {interaction_id}: {e}"
         )
@@ -1180,7 +1189,7 @@ async def stream_assigned_interactions(
                 "Connection": "keep-alive",
             },
         )
-    except HTTPException:
+    except HTTPException as e:
         logger.warning(
             f"HTTPException al iniciar SSE agregado para asesor {current_user.get('_id')}: {e}"
         )
@@ -1311,7 +1320,7 @@ async def update_interaction_state(
             "asesor_id": asesor_id,
         }
 
-    except HTTPException:
+    except HTTPException as e:
         logger.warning(
             f"HTTPException al actualizar estado de interacción {interaction_id}: {e}"
         )
