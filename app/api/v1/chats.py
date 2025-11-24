@@ -198,22 +198,75 @@ async def get_chats_overview(
                     for i in assigned
                     if (i or {}).get("state") == InteractionState.DERIVED.value
                 ]
+
+            # Helper: register keys for filter set and enrichment maps
+            def _register_key_for_filter(it: dict, key: str):
+                if not key:
+                    return
+                mongo_id = it.get("_id")
+                # Add to filter set (exact WAHA key like 519...@c.us or ...@lid)
+                ids_filter_set.add(key)
+                # Also add to enrichment maps
+                interaction_by_key[key] = it
+                if mongo_id:
+                    interaction_id_map[key] = str(mongo_id)
+                if "@" in key:
+                    local = key.split("@", 1)[0]
+                    interaction_by_key[local] = it
+                    if mongo_id:
+                        interaction_id_map[local] = str(mongo_id)
+                else:
+                    domain_key = f"{key}@c.us"
+                    interaction_by_key[domain_key] = it
+                    if mongo_id:
+                        interaction_id_map[domain_key] = str(mongo_id)
+
             for it in interactions:
                 phone = (it.get("phone") or "").strip()
                 chat_id = (it.get("chat_id") or "").strip()
-                mongo_id = it.get("_id")
                 if phone:
-                    ids_filter_set.add(phone)
+                    _register_key_for_filter(it, phone)
+                elif chat_id:
+                    _register_key_for_filter(it, chat_id)
+
+            # Additionally, build enrichment maps from ALL interactions (any state)
+            try:
+                all_total = InteractionModel.count_all(state=None)
+                all_interactions = (
+                    InteractionModel.find_all(skip=0, limit=all_total, state=None)
+                    if all_total and all_total > 0
+                    else []
+                )
+
+                def _register_map_only(it: dict, key: str):
+                    if not key:
+                        return
+                    mongo_id = it.get("_id")
+                    interaction_by_key[key] = it
                     if mongo_id:
-                        interaction_id_map[phone] = str(mongo_id)
-                    interaction_by_key[phone] = it
-                    # WAHA chat format normalization helper: map phone@c.us as well
-                    interaction_by_key[f"{phone}@c.us"] = it
-                elif chat_id and "@" in chat_id:
-                    ids_filter_set.add(chat_id)
-                    if mongo_id:
-                        interaction_id_map[chat_id] = str(mongo_id)
-                    interaction_by_key[chat_id] = it
+                        interaction_id_map[key] = str(mongo_id)
+                    if "@" in key:
+                        local = key.split("@", 1)[0]
+                        interaction_by_key[local] = it
+                        if mongo_id:
+                            interaction_id_map[local] = str(mongo_id)
+                    else:
+                        domain_key = f"{key}@c.us"
+                        interaction_by_key[domain_key] = it
+                        if mongo_id:
+                            interaction_id_map[domain_key] = str(mongo_id)
+
+                for ait in all_interactions:
+                    a_phone = (ait.get("phone") or "").strip()
+                    a_chat_id = (ait.get("chat_id") or "").strip()
+                    if a_phone:
+                        _register_map_only(ait, a_phone)
+                    elif a_chat_id:
+                        _register_map_only(ait, a_chat_id)
+            except Exception as e:
+                logger.warning(
+                    f"Error al construir mapas de enriquecimiento desde todas las interacciones: {e}"
+                )
         except Exception as e:
             logger.warning(
                 f"Error al construir filtro de IDs de interacciones: {e}. Se usará listado mínimo desde DB"
@@ -258,6 +311,62 @@ async def get_chats_overview(
                     logger.info(
                         f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
                     )
+                    # Enrich cached items with interaction_id, last_message, timestamp and summary
+                    try:
+                        enriched_cached = []
+                        for c in cached_result or []:
+                            cd = dict(c or {})
+                            cid = str(cd.get("id", ""))
+
+                            # Enrich with DB last_message and timestamp
+                            try:
+                                db_chat = ChatModel.get_chat(cid) if cid else None
+                                if db_chat:
+                                    if db_chat.get("timestamp") is not None:
+                                        cd["timestamp"] = db_chat.get("timestamp")
+                                    last_msg = db_chat.get("last_message")
+                                    if last_msg:
+                                        cd["last_message"] = last_msg
+                            except Exception:
+                                pass
+
+                            # Attach interaction_id
+                            inter_id = interaction_id_map.get(cid)
+                            if not inter_id and "@" in cid:
+                                inter_id = interaction_id_map.get(cid.split("@", 1)[0])
+                            if inter_id:
+                                cd["interaction_id"] = inter_id
+
+                            # Generate summary from interaction timeline/route
+                            try:
+                                it = interaction_by_key.get(cid)
+                                if not it and "@" in cid:
+                                    it = interaction_by_key.get(cid.split("@", 1)[0])
+                                if it:
+                                    cd["summary"] = _build_interaction_summary(
+                                        it.get("timeline", []), it.get("route")
+                                    )
+                            except Exception:
+                                pass
+
+                            enriched_cached.append(cd)
+                        # Aplicar filtro de IDs permitidos y omitir chats sin interacción
+                        if ids_filter:
+                            allowed_set = set(ids_filter)
+                            enriched_cached = [
+                                cd
+                                for cd in enriched_cached
+                                if cd.get("id") in allowed_set
+                            ]
+                        # Omitir chats que no tengan interaction_id cuando se solicita estado
+                        if filter_state in {"pending", "derived"}:
+                            enriched_cached = [
+                                cd for cd in enriched_cached if cd.get("interaction_id")
+                            ]
+                        cached_result = enriched_cached
+                    except Exception:
+                        # Do not block cache return if enrichment fails
+                        pass
                     return {
                         "success": True,
                         "data": {
@@ -276,6 +385,54 @@ async def get_chats_overview(
                     logger.info(
                         f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
                     )
+                    # Enrich cached items with interaction_id, last_message, timestamp and summary
+                    try:
+                        enriched_cached = []
+                        for c in cached_result or []:
+                            cd = dict(c or {})
+                            cid = str(cd.get("id", ""))
+
+                            # Enrich with DB last_message and timestamp
+                            try:
+                                db_chat = ChatModel.get_chat(cid) if cid else None
+                                if db_chat:
+                                    if db_chat.get("timestamp") is not None:
+                                        cd["timestamp"] = db_chat.get("timestamp")
+                                    last_msg = db_chat.get("last_message")
+                                    if last_msg:
+                                        cd["last_message"] = last_msg
+                            except Exception:
+                                pass
+
+                            # Attach interaction_id
+                            inter_id = interaction_id_map.get(cid)
+                            if not inter_id and "@" in cid:
+                                inter_id = interaction_id_map.get(cid.split("@", 1)[0])
+                            if inter_id:
+                                cd["interaction_id"] = inter_id
+
+                            # Generate summary from interaction timeline/route
+                            try:
+                                it = interaction_by_key.get(cid)
+                                if not it and "@" in cid:
+                                    it = interaction_by_key.get(cid.split("@", 1)[0])
+                                if it:
+                                    cd["summary"] = _build_interaction_summary(
+                                        it.get("timeline", []), it.get("route")
+                                    )
+                            except Exception:
+                                pass
+
+                            enriched_cached.append(cd)
+                        # Omitir chats que no tengan interaction_id cuando se solicita estado
+                        filter_state_local = (state or "pending").strip().lower()
+                        if filter_state_local in {"pending", "derived"}:
+                            enriched_cached = [
+                                cd for cd in enriched_cached if cd.get("interaction_id")
+                            ]
+                        cached_result = enriched_cached
+                    except Exception:
+                        pass
                     return {
                         "success": True,
                         "data": {
@@ -497,7 +654,7 @@ async def get_chats_overview(
             pass
 
         # Guardar en cache
-        cache.set(cache_key, overview_chats, ttl=300)
+        cache.set(cache_key, overview_chats, ttl=60)
 
         # Crear respuesta estructurada
         response_data = {

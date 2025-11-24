@@ -86,11 +86,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Verifica y decodifica el token JWT"""
+    """Verify and decode a JWT token. Accepts raw token string or HTTPAuthorizationCredentials."""
     try:
-        payload = jwt.decode(
-            credentials.credentials, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM]
+        # Support both direct token string and HTTPAuthorizationCredentials
+        token = (
+            credentials
+            if isinstance(credentials, str)
+            else getattr(credentials, "credentials", None)
         )
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
         email: str = payload.get("sub")
         role: str = payload.get("role", "asesor")  # Extraer rol del token
         if email is None:
@@ -106,7 +117,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
             detail="Token expirado",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    except jwt.JWTError:
+    except jwt.InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token inválido",
