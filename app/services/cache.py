@@ -363,27 +363,32 @@ def cache_key_for_chat(db_id: str) -> str:
 
 
 def cache_key_for_overview(
-    limit: int, offset: int, ids: Optional[List[str]] = None
+    limit: int,
+    offset: int,
+    ids: Optional[List[str]] = None,
+    state: Optional[str] = None,
 ) -> str:
     """
-    Genera clave de cache para overview de chats
+    Generate cache key for chats overview
 
     Args:
-        limit: Límite de resultados
-        offset: Desplazamiento
-        ids: Filtro opcional de chat IDs (array)
+        limit: Results limit
+        offset: Pagination offset
+        ids: Optional chat IDs filter (array)
+        state: Requested overview state (pending/derived). If None, uses 'all'.
 
     Returns:
-        Clave de cache como string
+        Cache key as string
     """
+    state_part = (state or "all").strip().lower()
     if ids:
         try:
             ids_sorted = sorted(ids)
             ids_hash = hashlib.sha256(",".join(ids_sorted).encode()).hexdigest()[:8]
-            return f"overview:{limit}:{offset}:{ids_hash}"
+            return f"overview:{limit}:{offset}:{state_part}:{ids_hash}"
         except Exception:
-            return f"overview:{limit}:{offset}:ids"
-    return f"overview:{limit}:{offset}"
+            return f"overview:{limit}:{offset}:{state_part}:ids"
+    return f"overview:{limit}:{offset}:{state_part}"
 
 
 # Decorador para cache automático

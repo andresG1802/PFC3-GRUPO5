@@ -288,7 +288,10 @@ async def _prewarm_overview_cache(limit: int = 10, offset: int = 0) -> None:
 
         cache = get_cache()
         cache_key = cache_key_for_overview(
-            limit, offset, ids_filter if ids_filter else None
+            limit,
+            offset,
+            ids_filter if ids_filter else None,
+            state="pending",
         )
         cache.set(cache_key, overview_chats, ttl=300)
     except Exception:

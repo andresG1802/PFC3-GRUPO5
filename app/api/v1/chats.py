@@ -278,7 +278,10 @@ async def get_chats_overview(  # noqa: C901
         # Verificar cache con clave sensible al filtro de ids
         cache = get_cache()
         cache_key = cache_key_for_overview(
-            limit, offset, ids_filter if ids_filter else None
+            limit,
+            offset,
+            ids_filter if ids_filter else None,
+            state=(state or "pending").strip().lower(),
         )
         cached_result = cache.get(cache_key)
         if cached_result is not None:
@@ -386,8 +389,9 @@ async def get_chats_overview(  # noqa: C901
                         "message": "Overview de chats obtenido desde cache",
                     }
             else:
-                # Solo devolver cache sin filtro cuando el estado no es 'derived'
-                if (state or "pending").strip().lower() != "derived":
+                # Return cached overview only if state is 'pending' and apply state filter
+                filter_state_local = (state or "pending").strip().lower()
+                if filter_state_local != "derived":
                     logger.info(
                         f"Devolviendo overview desde cache: limit={limit}, offset={offset}"
                     )
@@ -430,12 +434,33 @@ async def get_chats_overview(  # noqa: C901
                                 pass
 
                             enriched_cached.append(cd)
-                        # Omitir chats que no tengan interaction_id cuando se solicita estado
-                        filter_state_local = (state or "pending").strip().lower()
+                        # Omit chats without interaction_id when filtering by state
                         if filter_state_local in {"pending", "derived"}:
                             enriched_cached = [
                                 cd for cd in enriched_cached if cd.get("interaction_id")
                             ]
+                        # Apply state filter when ids_filter is empty
+                        if filter_state_local == "pending":
+                            try:
+
+                                def _is_pending(chat_id: str) -> bool:
+                                    it = interaction_by_key.get(chat_id)
+                                    if not it and "@" in chat_id:
+                                        it = interaction_by_key.get(
+                                            chat_id.split("@", 1)[0]
+                                        )
+                                    return (it or {}).get(
+                                        "state"
+                                    ) == InteractionState.PENDING.value
+
+                                enriched_cached = [
+                                    cd
+                                    for cd in enriched_cached
+                                    if _is_pending(str(cd.get("id", "")))
+                                ]
+                            except Exception:
+                                # If state filter fails, prefer returning empty list to avoid mixing states
+                                enriched_cached = []
                         cached_result = enriched_cached
                     except Exception:
                         # Registrar traza completa y evitar referenciar variables fuera de alcance
@@ -655,6 +680,30 @@ async def get_chats_overview(  # noqa: C901
                         overview_chats.append(chat_dict)
                     except Exception as e:
                         logger.warning(f"Error agregando chat mínimo para {mid}: {e}")
+
+        # Apply state-based filtering for non-cached results
+        try:
+            filter_state_nc = (state or "pending").strip().lower()
+            # Omit chats without interaction_id when filtering by state
+            if filter_state_nc in {"pending", "derived"}:
+                overview_chats = [
+                    cd for cd in overview_chats if cd.get("interaction_id")
+                ]
+            # Apply pending filter using DB interaction state when ids_filter is empty
+            if not ids_filter and filter_state_nc == "pending":
+
+                def _is_pending_nc(chat_id: str) -> bool:
+                    it = interaction_by_key.get(chat_id)
+                    if not it and "@" in chat_id:
+                        it = interaction_by_key.get(chat_id.split("@", 1)[0])
+                    return (it or {}).get("state") == InteractionState.PENDING.value
+
+                overview_chats = [
+                    cd for cd in overview_chats if _is_pending_nc(str(cd.get("id", "")))
+                ]
+        except Exception:
+            # If state filter fails, prefer returning empty list to avoid mixing states
+            overview_chats = []
 
         # Aplicar paginación hardcodeada por si el backend de WAHA no respeta límites
         try:
