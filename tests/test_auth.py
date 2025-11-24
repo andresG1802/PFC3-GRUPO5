@@ -372,8 +372,9 @@ class TestTokenValidation:
         headers = {"Authorization": "Bearer invalid_token_format"}
         response = client.get("/auth/me", headers=headers)
 
-        assert response.status_code == 500
-        assert "Ha ocurrido un error inesperado" in response.json()["detail"]
+        # Token con formato inválido debe responder 401 (Unauthorized)
+        assert response.status_code == 401
+        assert "Token inválido" in response.json()["detail"]
 
     def test_missing_authorization_header(self, client: TestClient):
         """Test sin header de autorización"""

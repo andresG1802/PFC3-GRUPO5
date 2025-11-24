@@ -8,3 +8,4 @@ model/
 benchmarks*
 .pytest_cache/
 .sessions
+**coverage**

@@ -266,32 +266,31 @@ class WAHAClient(LoggerMixin):
         self, limit: int = 20, offset: int = 0, ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Get an optimized chats overview from WAHA using GET.
+        Obtener overview de chats desde WAHA usando POST.
 
-        WAHA responde con overview en `GET /api/{session}/chats/overview`.
-        Si se proporcionan `ids`, intentaremos pasarlos como query param
-        (si no son soportados, aplicaremos filtrado local en el caller).
+        WAHA responde con overview en `POST /api/{session}/chats/overview`.
+        Si se proporcionan `ids`, las incluimos en el cuerpo JSON; si el servidor
+        no soporta filtrado por ids en POST, el caller aplicará filtrado local.
 
         Args:
-            limit: Max chats to fetch
-            offset: Pagination offset
-            ids: Optional list of chat ids to filter
+            limit: Máximo de chats a obtener
+            offset: Desplazamiento para paginación
+            ids: Lista opcional de chat ids a filtrar
 
         Returns:
-            List of overview chat objects
+            Lista de objetos de overview de chats
         """
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
-            params: Dict[str, Any] = {"limit": limit, "offset": offset}
+            payload: Dict[str, Any] = {"limit": limit, "offset": offset}
             if ids:
-                # En caso de soporte, pasar ids como query; algunos servidores aceptan ids repetidos
-                params["ids"] = ids
+                payload["ids"] = ids
 
             logger.debug(
-                f"Obteniendo overview de chats (GET): {url} - Params: {params}"
+                f"Obteniendo overview de chats (POST): {url} - Payload: {payload}"
             )
 
-            response = await self.client.get(url, params=params)
+            response = await self.client.post(url, json=payload)
             data = self._handle_response(response)
 
             # WAHA puede devolver directamente una lista o un objeto con lista
