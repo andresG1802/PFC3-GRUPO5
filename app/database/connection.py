@@ -46,7 +46,10 @@ def get_mongodb_url() -> str:
         port = "65497"  # Puerto mapeado actual según docker ps
         logger.info(f"Conectando a MongoDB localmente: {host}:{port}")
 
-    return f"mongodb://{MONGO_INITDB_ROOT_USERNAME}:{MONGO_INITDB_ROOT_PASSWORD}@{host}:{port}/{MONGO_INITDB_DATABASE}?authSource=admin"
+    return (
+        f"mongodb://{MONGO_INITDB_ROOT_USERNAME}:{MONGO_INITDB_ROOT_PASSWORD}"
+        f"@{host}:{port}/{MONGO_INITDB_DATABASE}?authSource=admin"
+    )
 
 
 def get_database() -> Database:

@@ -265,9 +265,6 @@ def log_request_context(request_id: str, user_id: Optional[str] = None):
 
     def decorator(func):
         async def wrapper(*args, **kwargs):
-            # Agregar contexto al logger
-            logger = logging.getLogger(func.__module__)
-
             # Crear un adaptador con contexto
             class ContextAdapter(logging.LoggerAdapter):
                 def process(self, msg, kwargs):

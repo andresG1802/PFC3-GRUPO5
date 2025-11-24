@@ -131,7 +131,7 @@ class RateLimitingMiddleware(BaseHTTPMiddleware):
 
             return response
 
-        except HTTPException as e:
+        except HTTPException:
             # Re-propagar HTTPException sin alterar el flujo
             raise
         except Exception:

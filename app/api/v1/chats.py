@@ -146,7 +146,7 @@ async def clear_chat_cache(
         },
     },
 )
-async def get_chats_overview(
+async def get_chats_overview(  # noqa: C901
     limit: int = Query(default=10, ge=1, le=100, description="Maximum number of items"),
     offset: int = Query(default=0, ge=0),
     state: Optional[str] = Query(
@@ -291,7 +291,7 @@ async def get_chats_overview(
                         if (c or {}).get("id")
                     }
                     missing_ids = set(ids_filter) - cached_ids
-                except Exception:
+                except Exception as e:
                     logger.warning(
                         f"Error al validar desalineación de cache overview con DB: {e}. Se usará listado mínimo desde DB"
                     )
@@ -327,7 +327,7 @@ async def get_chats_overview(
                                     last_msg = db_chat.get("last_message")
                                     if last_msg:
                                         cd["last_message"] = last_msg
-                            except Exception:
+                            except Exception as e:
                                 logger.warning(
                                     f"Error al enriquecer cached overview con DB: {e}. Chat={cid}"
                                 )
@@ -349,7 +349,7 @@ async def get_chats_overview(
                                     cd["summary"] = _build_interaction_summary(
                                         it.get("timeline", []), it.get("route")
                                     )
-                            except Exception:
+                            except Exception as e:
                                 logger.warning(
                                     f"Error al enriquecer cached overview con interacción: {e}. Chat={cid}"
                                 )
@@ -438,8 +438,9 @@ async def get_chats_overview(
                             ]
                         cached_result = enriched_cached
                     except Exception:
-                        logger.warning(
-                            f"Error al enriquecer cached overview con interacción: {e}. Chat={cid}"
+                        # Registrar traza completa y evitar referenciar variables fuera de alcance
+                        logger.exception(
+                            "Error al enriquecer cached overview desde cache sin filtro"
                         )
                         pass
                     return {
@@ -488,7 +489,7 @@ async def get_chats_overview(
             allowed_ids = set(ids_filter)
             try:
                 raw_chats = [c for c in raw_chats if c.get("id") in allowed_ids]
-            except Exception:
+            except Exception as e:
                 logger.warning(
                     f"Error al filtrar chats por ID: {e}. Se usará listado mínimo desde DB"
                 )
@@ -499,7 +500,7 @@ async def get_chats_overview(
             raw_chats = [
                 c for c in raw_chats if str(c.get("id", "")).strip() != "0@c.us"
             ]
-        except Exception:
+        except Exception as e:
             logger.warning(
                 f"Error al filtrar chat bloqueado: {e}. Se usará listado mínimo desde DB"
             )
@@ -538,7 +539,7 @@ async def get_chats_overview(
                         last_msg = db_chat.get("last_message")
                         if last_msg:
                             overview_data["last_message"] = last_msg
-                except Exception:
+                except Exception as e:
                     # No bloquear overview si falla la lectura de DB
                     logger.warning(
                         f"Error al leer último mensaje de chat {overview_data.get('id', 'unknown')} desde DB: {e}"
@@ -566,7 +567,7 @@ async def get_chats_overview(
                         chat_dict["summary"] = _build_interaction_summary(
                             it.get("timeline", []), it.get("route")
                         )
-                except Exception:
+                except Exception as e:
                     logger.warning(
                         f"Error al generar summary para chat {raw_chat.get('id', 'unknown')}: {e}"
                     )

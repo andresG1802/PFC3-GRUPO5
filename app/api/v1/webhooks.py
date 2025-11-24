@@ -11,10 +11,8 @@ from ...services.cache import get_cache
 from ...utils.logging_config import get_logger
 from ..models.webhooks import MessageEvent, WebhookResponse
 
-# Logger específico para este módulo
 logger = get_logger(__name__)
 
-# Crear router
 router = APIRouter(tags=["Webhooks"])
 
 
@@ -181,12 +179,12 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
     summary="Recibir eventos de WAHA",
     description="""
     Endpoint para recibir eventos en tiempo real desde WAHA.
-    
-    **Eventos soportados:**
+
+    Eventos soportados:
     - `message`: Nuevo mensaje recibido
     - `message.ack`: Confirmación de mensaje enviado (ignorado por ahora)
-    
-    **Uso:** Este endpoint debe configurarse en WAHA como webhook URL.
+
+    Uso: Este endpoint debe configurarse en WAHA como webhook URL.
     """,
     responses={
         200: {
@@ -213,7 +211,6 @@ async def receive_waha_webhook(
     Recibe y procesa eventos de webhook desde WAHA
     """
     try:
-        # Obtener datos del webhook
         raw_data = await request.body()
 
         if not raw_data:
@@ -222,7 +219,6 @@ async def receive_waha_webhook(
                 detail="Cuerpo de la petición vacío",
             )
 
-        # Parsear JSON
         try:
             webhook_data = json.loads(raw_data)
         except json.JSONDecodeError as e:
@@ -306,7 +302,7 @@ async def receive_waha_webhook(
     summary="Obtener eventos recientes",
     description="""
     Obtiene una lista de eventos de webhook recientes para debugging y monitoreo.
-    
+
     **Uso:** Desarrollo, debugging, monitoreo de eventos en tiempo real.
     """,
     responses={

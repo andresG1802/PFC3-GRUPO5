@@ -385,8 +385,8 @@ class WAHAClient(LoggerMixin):
                                 return MessageAck.PENDING
                         return MessageAck.PENDING
                     except Exception:
-                        logger.error(
-                            f"Error normalizando ACK para mensaje {msg.get('id', '')}: {e}"
+                        logger.exception(
+                            f"Error normalizando ACK para mensaje {msg.get('id', '')}"
                         )
                         return MessageAck.PENDING
 
@@ -886,7 +886,7 @@ async def _quick_ping(base_url: str, session_name: str = "default") -> bool:
         ) as client:
             _ = await client.get(url)
             return True
-    except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError):
+    except (httpx.ConnectError, httpx.TimeoutException, httpx.RequestError) as e:
         logger.warning(f"Error en ping rápido a WAHA: {e}")
         return False
 
