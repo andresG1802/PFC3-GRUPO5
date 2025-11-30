@@ -1393,9 +1393,6 @@ async def get_chat_service_health(
         )
 
 
-# Endpoints GET de mensajes por chat_id han sido deprecados y retirados.
-
-
 @router.post(
     "/{chat_id}/messages",
     response_model=SendMessageResponse,

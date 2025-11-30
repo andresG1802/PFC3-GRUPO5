@@ -914,9 +914,7 @@ async def get_waha_client() -> WAHAClient:
     global _waha_client
 
     if _waha_client is None:
-        candidates = [
-            ("http://waha:8000", "Docker") if DEBUG else ("http://waha:3000", "Docker"),
-        ]
+        candidates = [("http://waha:3000", "Docker")]
 
         for base_url, label in candidates:
             if await _quick_ping(base_url, "default"):
