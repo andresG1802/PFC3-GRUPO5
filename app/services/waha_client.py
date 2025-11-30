@@ -95,9 +95,12 @@ class WAHAClient(LoggerMixin):
         self.session_name = session_name
         self.api_key = WAHA_API_KEY
 
-        # Configurar cliente HTTP con timeouts
+        # Configurar cliente HTTP con timeouts agresivos y límites de conexión
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(8.0, connect=4.0),
+            timeout=httpx.Timeout(connect=2.0, read=8.0, write=8.0, pool=2.0),
+            limits=httpx.Limits(
+                max_connections=20, max_keepalive_connections=10, keepalive_expiry=15.0
+            ),
             headers={"X-Api-Key": self.api_key, "Content-Type": "application/json"},
         )
 
@@ -203,7 +206,7 @@ class WAHAClient(LoggerMixin):
         except httpx.ConnectError:
             raise WAHAConnectionError("No se pudo conectar con WAHA")
 
-    @retry_on_failure(max_retries=3, delay=1.0)
+    @retry_on_failure(max_retries=2, delay=1.0)
     async def get_chats(self, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
         """
         Obtiene lista de chats desde WAHA
@@ -219,11 +222,15 @@ class WAHAClient(LoggerMixin):
 
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
-            params = {"limit": limit, "offset": offset}
+            payload = {"pagination": {"limit": limit, "offset": offset}}
 
             self.log_operation("get_chats_request", url=url, limit=limit, offset=offset)
 
-            response = await self.client.get(url, params=params)
+            response = await self.client.post(
+                url,
+                json=payload,
+                headers={"X-Api-Key": self.api_key, "Accept": "application/json"},
+            )
             data = self._handle_response(response)
 
             # WAHA puede devolver directamente una lista o un objeto con lista
@@ -261,7 +268,7 @@ class WAHAClient(LoggerMixin):
             )
             raise WAHAConnectionError("No se pudo conectar con WAHA")
 
-    @retry_on_failure(max_retries=3, delay=1.0)
+    @retry_on_failure(max_retries=2, delay=1.0)
     async def get_chats_overview(
         self, limit: int = 20, offset: int = 0, ids: Optional[List[str]] = None
     ) -> List[Dict[str, Any]]:
@@ -311,7 +318,7 @@ class WAHAClient(LoggerMixin):
         except httpx.ConnectError:
             raise WAHAConnectionError("No se pudo conectar con WAHA")
 
-    @retry_on_failure(max_retries=3, delay=1.0)
+    @retry_on_failure(max_retries=2, delay=1.0)
     async def get_chat_by_id(self, chat_id: str) -> Optional[Dict[str, Any]]:
         """
         Obtiene un chat específico por ID
@@ -323,8 +330,8 @@ class WAHAClient(LoggerMixin):
             Datos del chat o None si no existe
         """
         try:
-            # Primero intentamos obtener el chat desde la lista general
-            chats = await self.get_chats(limit=100)  # Límite alto para buscar
+            # Usar overview con filtro por ID para evitar llamadas costosas
+            chats = await self.get_chats_overview(limit=1, offset=0, ids=[chat_id])
 
             for chat in chats:
                 if chat.get("id") == chat_id:
@@ -451,7 +458,7 @@ class WAHAClient(LoggerMixin):
                 "picture_url": None,
             }
 
-    @retry_on_failure(max_retries=3, delay=1.0)
+    @retry_on_failure(max_retries=2, delay=1.0)
     async def get_messages(
         self, chat_id: str, limit: int = 20, offset: int = 0
     ) -> Dict[str, Any]:

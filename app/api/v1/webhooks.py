@@ -114,6 +114,8 @@ async def process_webhook_event(event_type: str, event_data: Dict[str, Any]) -> 
                     # Translation stage (placeholder)
                     # TODO: Translate the incoming message body before persistence/publish
                     msg_body = event_data.get("body")
+                    if not msg_body:
+                        logger.warning(f"Empty message body for chat: {chat_id}")
 
                     # Persist translated/normalized message BEFORE publishing to SSE
                     try:
