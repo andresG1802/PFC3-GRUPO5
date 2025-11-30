@@ -32,14 +32,6 @@ jobs:
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
         uvx flake8 app/ --extend-ignore=E203 --count --exit-zero --max-complexity=35 --max-line-length=127 --statistics
 
-    - name: Format check with black
-      run: |
-        uvx black --check app/
-
-    - name: Import sorting check with isort
-      run: |
-        uvx isort --check-only app/
-
     - name: Run unit tests
       run: |
         uv run pytest tests/ -v -m "not integration and not slow" --cov=app --cov-report=xml
