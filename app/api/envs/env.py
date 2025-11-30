@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, description="Modo debug de la aplicación")
 
     host: str = Field(
-        default="0.0.0.0", description="Host donde se ejecutará la aplicación"
+        default="127.0.0.1", description="Host donde se ejecutará la aplicación"
     )
 
     api_port: int = Field(
