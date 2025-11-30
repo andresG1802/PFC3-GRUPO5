@@ -109,13 +109,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=(
         ["*"]
-        # TBD: Habilitar CORS en producción
-        # if DEBUG
-        # else [
-        #     "https://aru-link.com",
-        #     "https://www.aru-link.com",
-        #     "https://dash.aru-link.com",
-        # ]
+        if DEBUG
+        else [
+            "https://aru-link.com",
+            "https://www.aru-link.com",
+            "https://arulink-system.vercel.app",
+            "https://www.arulink-system.vercel.app",
+        ]
     ),
     allow_credentials=True,
     allow_methods=["*"],

@@ -483,7 +483,7 @@ async def get_chats_overview(  # noqa: C901
 
         logger.info(f"Obteniendo chats overview - limit: {limit}, offset: {offset}")
 
-        # Intentar obtener overview optimizado con filtro por ids; para 'derived' sin ids, no solicitar overview global
+        # Obtener overview desde WAHA
         raw_chats = []
         try:
             if ids_filter:
@@ -498,26 +498,32 @@ async def get_chats_overview(  # noqa: C901
                     raw_chats = await waha_client.get_chats_overview(
                         limit=limit, offset=offset
                     )
-        except Exception:
-            logger.warning("Overview no disponible, intentando fallback de chats")
-            try:
-                raw_chats = await waha_client.get_chats(limit=limit, offset=offset)
-            except Exception as e:
-                # Si también falla, continuamos con lista vacía para construir fallback desde DB
-                logger.warning(
-                    f"Fallback de chats falló: {e}. Se usará listado mínimo desde DB"
-                )
-                raw_chats = []
+        except WAHATimeoutError as e:
+            logger.warning(f"Timeout comunicando con WAHA overview: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Timeout en comunicación con WAHA overview",
+            )
+        except WAHAConnectionError as e:
+            logger.warning(f"Conexión a WAHA fallida: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="WAHA no disponible",
+            )
+        except Exception as e:
+            logger.error(f"Error inesperado obteniendo WAHA overview: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error interno al obtener overview",
+            )
 
-        # Si hubo fallback y tenemos filtro, aplicar filtrado local por id
+        # Aplicar filtrado local por id (defensivo) cuando WAHA overview retorna más elementos
         if ids_filter:
             allowed_ids = set(ids_filter)
             try:
                 raw_chats = [c for c in raw_chats if c.get("id") in allowed_ids]
             except Exception as e:
-                logger.warning(
-                    f"Error al filtrar chats por ID: {e}. Se usará listado mínimo desde DB"
-                )
+                logger.warning(f"Error al filtrar chats por ID: {e}")
                 pass
 
         # Exclude blocked chat id from overview results
@@ -603,83 +609,6 @@ async def get_chats_overview(  # noqa: C901
                     f"Error creando overview para chat {raw_chat.get('id', 'unknown')}: {e}"
                 )
                 continue
-
-        # Fallback: si faltan chats esperados por interacciones, agregarlos como mínimos
-        if ids_filter:
-            try:
-                present_ids = {c.get("id") for c in overview_chats if c.get("id")}
-                expected_ids = set(ids_filter)
-                missing_ids = expected_ids - present_ids
-            except Exception as e:
-                logger.warning(
-                    f"Error al comparar IDs esperados con IDs presentes: {e}"
-                )
-                missing_ids = set()
-
-            if missing_ids:
-                logger.info(
-                    f"Agregando {len(missing_ids)} chats mínimos desde interacciones (fallback)"
-                )
-                # Indexar interacciones por clave (phone o chat_id)
-                inter_index: dict[str, dict] = {}
-                try:
-                    for it in interactions or []:
-                        key = (it.get("phone") or it.get("chat_id") or "").strip()
-                        if key:
-                            inter_index[key] = it
-                except Exception as e:
-                    logger.warning(f"Error indexando interacciones para fallback: {e}")
-                    inter_index = {}
-
-                for mid in missing_ids:
-                    # Skip blocked chat id from fallback
-                    if str(mid).strip() == "0@c.us":
-                        continue
-                    it = inter_index.get(mid, {})
-                    # Construir datos mínimos
-                    minimal = {
-                        "id": mid,
-                        "name": it.get("phone") or it.get("chat_id") or mid,
-                        "type": "individual",
-                        "timestamp": None,
-                        "unread_count": 0,
-                        "archived": False,
-                        "pinned": False,
-                    }
-
-                    # Enriquecer fallback con último mensaje almacenado en MongoDB
-                    try:
-                        db_chat = ChatModel.get_chat(mid)
-                        if db_chat:
-                            if db_chat.get("timestamp"):
-                                minimal["timestamp"] = db_chat.get("timestamp")
-                            last_msg = db_chat.get("last_message")
-                            if last_msg:
-                                minimal["last_message"] = last_msg
-                    except Exception as e:
-                        logger.warning(
-                            f"Error al leer último mensaje de chat {mid} desde DB: {e}"
-                        )
-                        pass
-                    try:
-                        chat_obj = ChatOverview(**minimal)
-                        chat_dict = chat_obj.dict()
-                        mongo_id = it.get("_id")
-                        if mongo_id:
-                            chat_dict["interaction_id"] = str(mongo_id)
-                        # Añadir summary si se tiene interacción
-                        try:
-                            chat_dict["summary"] = _build_interaction_summary(
-                                it.get("timeline", []), it.get("route")
-                            )
-                        except Exception as e:
-                            logger.warning(
-                                f"Error al generar summary para chat {mid}: {e}"
-                            )
-                            pass
-                        overview_chats.append(chat_dict)
-                    except Exception as e:
-                        logger.warning(f"Error agregando chat mínimo para {mid}: {e}")
 
         # Apply state-based filtering for non-cached results
         try:

@@ -84,7 +84,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         headers_to_remove = [
             "Server",
             "server",
-            "X-Powered-By",
+            "x-powered-by",
         ]
 
         for header in headers_to_remove:

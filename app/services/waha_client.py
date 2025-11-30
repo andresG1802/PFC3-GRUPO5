@@ -269,8 +269,11 @@ class WAHAClient(LoggerMixin):
         Obtener overview de chats desde WAHA usando POST.
 
         WAHA responde con overview en `POST /api/{session}/chats/overview`.
-        Si se proporcionan `ids`, las incluimos en el cuerpo JSON; si el servidor
-        no soporta filtrado por ids en POST, el caller aplicará filtrado local.
+        Payload esperado:
+        {
+          "pagination": {"limit": <int>, "offset": <int>},
+          "filter": {"ids": [<str>, ...]}  // opcional
+        }
 
         Args:
             limit: Máximo de chats a obtener
@@ -282,15 +285,19 @@ class WAHAClient(LoggerMixin):
         """
         try:
             url = f"{self.base_url}/api/{self.session_name}/chats/overview"
-            payload: Dict[str, Any] = {"limit": limit, "offset": offset}
+            payload: Dict[str, Any] = {"pagination": {"limit": limit, "offset": offset}}
             if ids:
-                payload["ids"] = ids
+                payload["filter"] = {"ids": ids}
 
             logger.debug(
                 f"Obteniendo overview de chats (POST): {url} - Payload: {payload}"
             )
 
-            response = await self.client.post(url, json=payload)
+            response = await self.client.post(
+                url,
+                json=payload,
+                headers={"X-Api-Key": self.api_key, "Accept": "application/json"},
+            )
             data = self._handle_response(response)
 
             # WAHA puede devolver directamente una lista o un objeto con lista
