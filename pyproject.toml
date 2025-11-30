@@ -84,7 +84,3 @@ dev = [
     "isort>=7.0.0",
     "flake8>=7.3.0",
 ]
-
-[tool.flake8]
-# Ignore E203 globally to avoid slice spacing conflicts
-extend-ignore = ["E203"]
